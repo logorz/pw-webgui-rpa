@@ -36,8 +36,18 @@ function generateNodeCode(node: Node<FlowNodeData>, indent: string, variables: S
       const viewport = String(p.viewport || '1280x720');
       const [vw, vh] = viewport === 'custom' ? ['1280', '720'] : viewport.split('x');
       const locale = p.locale || 'zh-CN';
+      const contextOpts: string[] = [`viewport: { width: ${vw}, height: ${vh} }`, `locale: '${locale}'`];
+      if (p.recordVideo === 'true') {
+        contextOpts.push(`recordVideo: { dir: 'test-results/videos' }`);
+      }
+      if (p.blockServiceWorkers === 'true') {
+        contextOpts.push(`serviceWorkers: 'block'`);
+      }
       lines.push(`${indent}const browser = await ${browserType}.launch({ headless: ${headless} });`);
-      lines.push(`${indent}const context = await browser.newContext({ viewport: { width: ${vw}, height: ${vh} }, locale: '${locale}' });`);
+      lines.push(`${indent}const context = await browser.newContext({ ${contextOpts.join(', ')} });`);
+      if (p.recordTrace === 'true') {
+        lines.push(`${indent}await context.tracing.start({ screenshots: true, snapshots: true });`);
+      }
       lines.push(`${indent}const page = await context.newPage();`);
       if (p.url) {
         lines.push(`${indent}await page.goto(${resolveVar(p.url, variables)});`);
@@ -349,6 +359,110 @@ function generateNodeCode(node: Node<FlowNodeData>, indent: string, variables: S
       break;
     }
 
+    case 'handleDialog': {
+      const dialogAction = p.action || 'accept';
+      if (dialogAction === 'dismiss') {
+        lines.push(`${indent}page.once('dialog', async dialog => await dialog.dismiss());`);
+      } else {
+        const promptText = p.promptText ? resolveVar(p.promptText, variables) : "''";
+        lines.push(`${indent}page.once('dialog', async dialog => await dialog.accept(${promptText}));`);
+      }
+      break;
+    }
+
+    case 'download': {
+      if (!p.triggerSelector) {
+        lines.push(`${indent}// Error: triggerSelector is required for download`);
+        break;
+      }
+      lines.push(`${indent}const _downloadPromise = page.waitForEvent('download');`);
+      lines.push(`${indent}await page.locator(${resolveVar(p.triggerSelector, variables)}).click();`);
+      lines.push(`${indent}const _download = await _downloadPromise;`);
+      const dlVarName = p.variableName || 'downloadPath';
+      variables.add(dlVarName);
+      if (p.savePath) {
+        lines.push(`${indent}await _download.saveAs(${resolveVar(p.savePath, variables)});`);
+        lines.push(`${indent}const ${dlVarName} = ${resolveVar(p.savePath, variables)};`);
+      } else {
+        lines.push(`${indent}const ${dlVarName} = await _download.path();`);
+      }
+      break;
+    }
+
+    case 'routeMock': {
+      if (!p.urlPattern) {
+        lines.push(`${indent}// Error: urlPattern is required for routeMock`);
+        break;
+      }
+      const mockStatus = p.statusCode || 200;
+      const mockContentType = p.contentType || 'application/json';
+      lines.push(`${indent}await page.route(${resolveVar(p.urlPattern, variables)}, async route => {`);
+      lines.push(`${indent}  await route.fulfill({ status: ${mockStatus}, contentType: '${esc(mockContentType)}', body: '${esc(String(p.responseBody || ''))}' });`);
+      lines.push(`${indent}});`);
+      break;
+    }
+
+    case 'routeAbort': {
+      if (!p.urlPattern) {
+        lines.push(`${indent}// Error: urlPattern is required for routeAbort`);
+        break;
+      }
+      lines.push(`${indent}await page.route(${resolveVar(p.urlPattern, variables)}, route => route.abort());`);
+      break;
+    }
+
+    case 'waitForResponse': {
+      if (!p.urlPattern) {
+        lines.push(`${indent}// Error: urlPattern is required for waitForResponse`);
+        break;
+      }
+      const respTimeout = p.timeout || 30000;
+      const respVarName = p.variableName;
+      if (respVarName) {
+        variables.add(String(respVarName));
+        lines.push(`${indent}const _response = await page.waitForResponse(${resolveVar(p.urlPattern, variables)}, { timeout: ${respTimeout} });`);
+        lines.push(`${indent}const ${respVarName} = await _response.text();`);
+      } else {
+        lines.push(`${indent}await page.waitForResponse(${resolveVar(p.urlPattern, variables)}, { timeout: ${respTimeout} });`);
+      }
+      break;
+    }
+
+    case 'switchPage': {
+      const switchMode = p.mode || 'new';
+      if (switchMode === 'new') {
+        lines.push(`${indent}page = await context.newPage();`);
+        if (p.url) {
+          lines.push(`${indent}await page.goto(${resolveVar(p.url, variables)});`);
+        }
+      } else if (switchMode === 'popup') {
+        if (p.triggerSelector) {
+          lines.push(`${indent}const _popupPromise = page.waitForEvent('popup');`);
+          lines.push(`${indent}await page.locator(${resolveVar(p.triggerSelector, variables)}).click();`);
+          lines.push(`${indent}page = await _popupPromise;`);
+          lines.push(`${indent}await page.waitForLoadState();`);
+        }
+      } else if (switchMode === 'tab') {
+        if (p.triggerSelector) {
+          lines.push(`${indent}const _tabPromise = context.waitForEvent('page');`);
+          lines.push(`${indent}await page.locator(${resolveVar(p.triggerSelector, variables)}).click();`);
+          lines.push(`${indent}page = await _tabPromise;`);
+          lines.push(`${indent}await page.waitForLoadState();`);
+        }
+      } else if (switchMode === 'index') {
+        const idx = p.pageIndex || 0;
+        lines.push(`${indent}const _pages = context.pages();`);
+        lines.push(`${indent}page = _pages[${idx}];`);
+      }
+      break;
+    }
+
+    case 'waitForLoadState': {
+      const loadState = p.state || 'load';
+      lines.push(`${indent}await page.waitForLoadState('${esc(loadState)}');`);
+      break;
+    }
+
     default:
       lines.push(`${indent}// TODO: Implement ${node.data.type}`);
   }
@@ -356,11 +470,11 @@ function generateNodeCode(node: Node<FlowNodeData>, indent: string, variables: S
   return lines.join('\n');
 }
 
-function buildExecutionTree(nodes: Node<FlowNodeData>[], edges: Edge[]): Map<string, { trueBranch: string[]; falseBranch: string[]; default: string[] }> {
-  const childrenMap = new Map<string, { trueBranch: string[]; falseBranch: string[]; default: string[] }>();
+function buildExecutionTree(nodes: Node<FlowNodeData>[], edges: Edge[]): Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; default: string[] }> {
+  const childrenMap = new Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; default: string[] }>();
 
   nodes.forEach(node => {
-    childrenMap.set(node.id, { trueBranch: [], falseBranch: [], default: [] });
+    childrenMap.set(node.id, { trueBranch: [], falseBranch: [], bodyBranch: [], doneBranch: [], default: [] });
   });
 
   edges.forEach(edge => {
@@ -372,6 +486,16 @@ function buildExecutionTree(nodes: Node<FlowNodeData>[], edges: Edge[]): Map<str
         entry.trueBranch.push(edge.target);
       } else {
         entry.falseBranch.push(edge.target);
+      }
+    } else if (sourceNode?.data.type === 'while' || sourceNode?.data.type === 'foreach') {
+      if (edge.sourceHandle === 'body') {
+        entry.bodyBranch.push(edge.target);
+      } else if (edge.sourceHandle === 'done') {
+        entry.doneBranch.push(edge.target);
+      } else if (entry.bodyBranch.length === 0) {
+        entry.bodyBranch.push(edge.target);
+      } else {
+        entry.doneBranch.push(edge.target);
       }
     } else {
       entry.default.push(edge.target);
@@ -428,7 +552,7 @@ function generateConditionCode(params: Record<string, string | number | boolean>
 function generateRecursive(
   nodeId: string,
   nodes: Node<FlowNodeData>[],
-  childrenMap: Map<string, { trueBranch: string[]; falseBranch: string[]; default: string[] }>,
+  childrenMap: Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; default: string[] }>,
   visited: Set<string>,
   indent: string,
   variables: Set<string>
@@ -466,20 +590,26 @@ function generateRecursive(
     lines.push(`${indent}let _iteration = 0;`);
     lines.push(`${indent}while (${condition} && _iteration < ${maxIterations}) {`);
     lines.push(`${indent}  _iteration++;`);
-    children.default.forEach(childId => {
+    children.bodyBranch.forEach(childId => {
       lines.push(...generateRecursive(childId, nodes, childrenMap, new Set(visited), indent + '  ', variables));
     });
     lines.push(`${indent}}`);
+    children.doneBranch.forEach(childId => {
+      lines.push(...generateRecursive(childId, nodes, childrenMap, new Set(visited), indent, variables));
+    });
   } else if (node.data.type === 'foreach') {
     const varName = node.data.parameters.variableName || 'item';
     const selector = node.data.parameters.selector || 'div';
     variables.add(varName);
     lines.push(`${indent}const _elements = await page.locator(${resolveVar(selector, variables)}).all();`);
     lines.push(`${indent}for (const ${varName} of _elements) {`);
-    children.default.forEach(childId => {
+    children.bodyBranch.forEach(childId => {
       lines.push(...generateRecursive(childId, nodes, childrenMap, new Set(visited), indent + '  ', variables));
     });
     lines.push(`${indent}}`);
+    children.doneBranch.forEach(childId => {
+      lines.push(...generateRecursive(childId, nodes, childrenMap, new Set(visited), indent, variables));
+    });
   } else {
     children.default.forEach(childId => {
       lines.push(...generateRecursive(childId, nodes, childrenMap, visited, indent, variables));

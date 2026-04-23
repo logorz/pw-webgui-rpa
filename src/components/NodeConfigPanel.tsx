@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, Save, Variable } from 'lucide-react';
 import type { Node } from '@xyflow/react';
 import type { FlowNodeData, NodeParameter } from '../types/nodes';
@@ -15,6 +15,35 @@ function resolveVariableRef(value: string, variables: string[]): string[] {
   const matches = value.match(/\$\{(\w+)\}/g);
   if (!matches) return [];
   return matches.map(m => m.slice(2, -1)).filter(v => variables.includes(v));
+}
+
+function renderVariablePreview(value: string): React.ReactNode[] {
+  const str = String(value);
+  const regex = /\$\{(\w+)\}/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+  let key = 0;
+
+  while ((match = regex.exec(str)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(<span key={key++}>{str.slice(lastIndex, match.index)}</span>);
+    }
+    parts.push(
+      <span key={key++} className="var-chip">{match[1]}</span>
+    );
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < str.length) {
+    parts.push(<span key={key++}>{str.slice(lastIndex)}</span>);
+  }
+
+  if (parts.length === 0) {
+    parts.push(<span key={0}>{str}</span>);
+  }
+
+  return parts;
 }
 
 function ParameterField({
@@ -163,7 +192,7 @@ function ParameterField({
           {param.description && <div className="param-desc">{param.description}</div>}
           {isVariableType && String(value).includes('${') && (
             <div className="variable-preview">
-              预览: {String(value).replace(/\$\{(\w+)\}/g, (_, name) => `<${name}>`)}
+              预览: {renderVariablePreview(String(value))}
             </div>
           )}
         </div>

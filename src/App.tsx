@@ -38,6 +38,7 @@ interface PickerState {
   mode: PickerMode;
   sourceId: string;
   targetId?: string;
+  sourceHandleId?: string;
 }
 
 const initialPickerState: PickerState = {
@@ -45,6 +46,7 @@ const initialPickerState: PickerState = {
   position: { x: 0, y: 0 },
   mode: 'after',
   sourceId: '',
+  sourceHandleId: undefined,
 };
 
 function App() {
@@ -101,6 +103,7 @@ function App() {
         mode: 'between',
         sourceId: detail.sourceId,
         targetId: detail.targetId,
+        sourceHandleId: detail.sourceHandleId,
       });
     };
 
@@ -220,15 +223,25 @@ function App() {
 
         setNodes((nds) => [...nds, newNode]);
         setEdges((eds) => {
-          const filtered = eds.filter(
-            (e) => !(e.source === picker.sourceId && e.target === picker.targetId)
+          const oldEdge = eds.find(
+            (e) =>
+              e.source === picker.sourceId &&
+              e.target === picker.targetId &&
+              (picker.sourceHandleId ? e.sourceHandle === picker.sourceHandleId : true)
           );
-          return [
+          const filtered = eds.filter(
+            (e) =>
+              !(e.source === picker.sourceId &&
+                e.target === picker.targetId &&
+                (picker.sourceHandleId ? e.sourceHandle === picker.sourceHandleId : true))
+          );
+          const newEdges = [
             ...filtered,
             {
               id: `edge-${Date.now()}-a`,
               source: picker.sourceId,
               target: newNode.id,
+              sourceHandle: oldEdge?.sourceHandle || picker.sourceHandleId || undefined,
               animated: true,
             },
             {
@@ -238,6 +251,7 @@ function App() {
               animated: true,
             },
           ];
+          return newEdges;
         });
       }
 

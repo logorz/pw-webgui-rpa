@@ -1,4 +1,4 @@
-import { memo, useState, useCallback } from 'react';
+import React, { memo, useState, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import type { FlowNodeData } from '../types/nodes';
@@ -27,6 +27,13 @@ import {
   Tag,
   Settings,
   Plus,
+  MessageSquare,
+  Download,
+  Wifi,
+  ShieldOff,
+  Activity,
+  Layers,
+  Loader,
 } from 'lucide-react';
 
 const iconMap: Record<string, React.ElementType> = {
@@ -52,7 +59,43 @@ const iconMap: Record<string, React.ElementType> = {
   Code,
   Hash,
   Tag,
+  MessageSquare,
+  Download,
+  Wifi,
+  ShieldOff,
+  Activity,
+  Layers,
+  Loader,
 };
+
+function renderParamValue(value: string): React.ReactNode[] {
+  const str = String(value);
+  const regex = /\$\{(\w+)\}/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+  let key = 0;
+
+  while ((match = regex.exec(str)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(<span key={key++}>{str.slice(lastIndex, match.index)}</span>);
+    }
+    parts.push(
+      <span key={key++} className="var-chip">{match[1]}</span>
+    );
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < str.length) {
+    parts.push(<span key={key++}>{str.slice(lastIndex)}</span>);
+  }
+
+  if (parts.length === 0) {
+    parts.push(<span key={0}>{str}</span>);
+  }
+
+  return parts;
+}
 
 function CustomNode({ data, selected, id }: NodeProps<FlowNodeData>) {
   const Icon = iconMap[data.icon || 'Globe'] || Globe;
@@ -102,7 +145,7 @@ function CustomNode({ data, selected, id }: NodeProps<FlowNodeData>) {
               .map(([key, value]) => (
                 <div key={key} className="custom-node-param">
                   <span className="param-key">{key}:</span>
-                  <span className="param-value">{String(value).substring(0, 20)}</span>
+                  <span className="param-value">{renderParamValue(String(value).substring(0, 30))}</span>
                 </div>
               ))}
             {Object.entries(data.parameters).length > 3 && (
@@ -114,12 +157,56 @@ function CustomNode({ data, selected, id }: NodeProps<FlowNodeData>) {
         )}
       </div>
 
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="node-handle"
-        style={{ background: data.color || '#3b82f6' }}
-      />
+      {data.type === 'if' ? (
+        <>
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="true"
+            className="node-handle node-handle-true"
+            style={{ background: '#22c55e', left: '30%' }}
+          />
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="false"
+            className="node-handle node-handle-false"
+            style={{ background: '#ef4444', left: '70%' }}
+          />
+          <div className="if-branch-labels">
+            <span className="branch-label branch-true">是</span>
+            <span className="branch-label branch-false">否</span>
+          </div>
+        </>
+      ) : data.type === 'while' || data.type === 'foreach' ? (
+        <>
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="body"
+            className="node-handle node-handle-body"
+            style={{ background: '#f59e0b', left: '30%' }}
+          />
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="done"
+            className="node-handle node-handle-done"
+            style={{ background: '#64748b', left: '70%' }}
+          />
+          <div className="if-branch-labels">
+            <span className="branch-label branch-body">循环体</span>
+            <span className="branch-label branch-done">结束</span>
+          </div>
+        </>
+      ) : (
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          className="node-handle"
+          style={{ background: data.color || '#3b82f6' }}
+        />
+      )}
 
       {isHovered && (
         <div

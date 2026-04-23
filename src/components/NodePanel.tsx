@@ -24,6 +24,13 @@ import {
   Tag,
   ChevronDown,
   ChevronRight,
+  MessageSquare,
+  Download,
+  Wifi,
+  ShieldOff,
+  Activity,
+  Layers,
+  Loader,
 } from 'lucide-react';
 import type { NodeTypeDefinition } from '../types/nodes';
 import { getNodesByCategory } from '../types/nodes';
@@ -51,13 +58,21 @@ const iconMap: Record<string, React.ElementType> = {
   Code,
   Hash,
   Tag,
+  MessageSquare,
+  Download,
+  Wifi,
+  ShieldOff,
+  Activity,
+  Layers,
+  Loader,
 };
 
-type CategoryKey = 'browser' | 'interaction' | 'control' | 'variable' | 'assertion';
+type CategoryKey = 'browser' | 'interaction' | 'network' | 'control' | 'variable' | 'assertion';
 
 const categoryConfig: Record<CategoryKey, { label: string; color: string }> = {
   browser: { label: '浏览器操作', color: '#3b82f6' },
   interaction: { label: '交互操作', color: '#8b5cf6' },
+  network: { label: '网络控制', color: '#06b6d4' },
   control: { label: '流程控制', color: '#f59e0b' },
   variable: { label: '变量数据', color: '#10b981' },
   assertion: { label: '断言验证', color: '#ef4444' },
@@ -137,6 +152,7 @@ export default function NodePanel({ onDragStart }: NodePanelProps) {
       <div className="node-panel-content">
         <CategorySection category="browser" onDragStart={onDragStart} />
         <CategorySection category="interaction" onDragStart={onDragStart} />
+        <CategorySection category="network" onDragStart={onDragStart} />
         <CategorySection category="control" onDragStart={onDragStart} />
         <CategorySection category="variable" onDragStart={onDragStart} />
         <CategorySection category="assertion" onDragStart={onDragStart} defaultExpanded={false} />

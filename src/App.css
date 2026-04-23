@@ -355,6 +355,56 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.custom-node .var-chip {
+  font-size: 9px;
+  padding: 0 3px;
+  line-height: 14px;
+}
+
+.node-handle-true,
+.node-handle-false {
+  width: 10px;
+  height: 10px;
+}
+
+.if-branch-labels {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 12px;
+  margin-top: 2px;
+}
+
+.branch-label {
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.branch-true {
+  color: #22c55e;
+}
+
+.branch-false {
+  color: #ef4444;
+}
+
+.branch-body {
+  color: #f59e0b;
+}
+
+.branch-done {
+  color: #64748b;
+}
+
+.node-handle-body,
+.node-handle-done {
+  width: 10px;
+  height: 10px;
 }
 
 .custom-node-more {
@@ -604,9 +654,43 @@ body {
 
 .variable-preview {
   font-size: 11px;
-  color: #6366f1;
+  color: #64748b;
   margin-top: 4px;
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+.var-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  line-height: 18px;
+  white-space: nowrap;
+  user-select: none;
+  cursor: default;
+  vertical-align: middle;
+}
+
+.var-chip::before {
+  content: '{';
+  color: #34d399;
+  font-weight: 400;
+}
+
+.var-chip::after {
+  content: '}';
+  color: #34d399;
+  font-weight: 400;
 }
 
 .config-panel-footer {

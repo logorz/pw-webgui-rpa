@@ -19,6 +19,7 @@ export default function CustomEdge({
   targetPosition,
   markerEnd,
   style,
+  sourceHandleId,
 }: EdgeProps) {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -39,13 +40,14 @@ export default function CustomEdge({
         edgeId: id,
         sourceId: source,
         targetId: target,
+        sourceHandleId: sourceHandleId || undefined,
         clientX: e.clientX,
         clientY: e.clientY,
       },
       bubbles: true,
     });
     window.dispatchEvent(event);
-  }, [id, source, target]);
+  }, [id, source, target, sourceHandleId]);
 
   return (
     <>

@@ -132,7 +132,7 @@ class Executor {
   private async executeNodeReal(
     nodeId: string,
     nodes: Node<FlowNodeData>[],
-    childrenMap: Map<string, { trueBranch: string[]; falseBranch: string[]; default: string[] }>,
+    childrenMap: Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; default: string[] }>,
     visited: Set<string>,
     ctx: ExecutionContext
   ): Promise<void> {
@@ -190,9 +190,12 @@ class Executor {
         for (let i = 0; i < maxIterations; i++) {
           const condition = await this.evaluateConditionReal(node.data.parameters, ctx);
           if (!condition) break;
-          for (const childId of children.default) {
+          for (const childId of children.bodyBranch) {
             await this.executeNodeReal(childId, nodes, childrenMap, new Set(visited), ctx);
           }
+        }
+        for (const childId of children.doneBranch) {
+          await this.executeNodeReal(childId, nodes, childrenMap, new Set(visited), ctx);
         }
       } else if (node.data.type === 'foreach') {
         const selector = node.data.parameters.selector || 'div';
@@ -201,10 +204,13 @@ class Executor {
           const elements = await ctx.page.locator(selector).all();
           for (const el of elements) {
             ctx.variables[varName] = el;
-            for (const childId of children.default) {
+            for (const childId of children.bodyBranch) {
               await this.executeNodeReal(childId, nodes, childrenMap, new Set(visited), ctx);
             }
           }
+        }
+        for (const childId of children.doneBranch) {
+          await this.executeNodeReal(childId, nodes, childrenMap, new Set(visited), ctx);
         }
       } else {
         for (const childId of children.default) {
@@ -226,8 +232,25 @@ class Executor {
     }
   }
 
+  private resolveVariables(
+    params: Record<string, string | number | boolean>,
+    variables: Record<string, string>
+  ): Record<string, string | number | boolean> {
+    const resolved: Record<string, string | number | boolean> = {};
+    for (const [key, value] of Object.entries(params)) {
+      if (typeof value === 'string' && value.includes('${')) {
+        resolved[key] = value.replace(/\$\{(\w+)\}/g, (_, varName) => {
+          return variables[varName] !== undefined ? String(variables[varName]) : `\${${varName}}`;
+        });
+      } else {
+        resolved[key] = value;
+      }
+    }
+    return resolved;
+  }
+
   private async runNodeAction(node: Node<FlowNodeData>, ctx: ExecutionContext): Promise<void> {
-    const p = node.data.parameters;
+    const p = this.resolveVariables(node.data.parameters, ctx.variables);
     const action = node.data.type;
 
     let response: Response;
@@ -261,10 +284,11 @@ class Executor {
     ctx: ExecutionContext
   ): Promise<boolean> {
     try {
+      const resolvedParams = this.resolveVariables(params, ctx.variables);
       const response = await fetch('http://localhost:3210/evaluate-condition', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ params, sessionId: ctx.sessionId }),
+        body: JSON.stringify({ params: resolvedParams, sessionId: ctx.sessionId }),
       });
       const result = await response.json();
       return result.result === true;
@@ -318,7 +342,7 @@ class Executor {
   private async executeNodeSimulated(
     nodeId: string,
     nodes: Node<FlowNodeData>[],
-    childrenMap: Map<string, { trueBranch: string[]; falseBranch: string[]; default: string[] }>,
+    childrenMap: Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; default: string[] }>,
     visited: Set<string>
   ): Promise<void> {
     if (visited.has(nodeId)) return;
@@ -374,9 +398,12 @@ class Executor {
         for (let i = 0; i < Math.min(maxIterations, 2); i++) {
           const condition = this.evaluateConditionSimulated(node.data.parameters);
           if (!condition) break;
-          for (const childId of children.default) {
+          for (const childId of children.bodyBranch) {
             await this.executeNodeSimulated(childId, nodes, childrenMap, new Set(visited));
           }
+        }
+        for (const childId of children.doneBranch) {
+          await this.executeNodeSimulated(childId, nodes, childrenMap, new Set(visited));
         }
       } else {
         for (const childId of children.default) {
@@ -408,6 +435,14 @@ class Executor {
         return !!params.text;
       case 'urlMatches':
         return !!params.url;
+      case 'selectorEditable':
+        return !!params.selector;
+      case 'selectorChecked':
+        return !!params.selector;
+      case 'selectorEnabled':
+        return !!params.selector;
+      case 'variableTruthy':
+        return !!params.variableName;
       default:
         return true;
     }
@@ -417,9 +452,9 @@ class Executor {
     this.abortController?.abort();
   }
 
-  private buildExecutionTree(nodes: Node<FlowNodeData>[], edges: Edge[]): Map<string, { trueBranch: string[]; falseBranch: string[]; default: string[] }> {
-    const childrenMap = new Map<string, { trueBranch: string[]; falseBranch: string[]; default: string[] }>();
-    nodes.forEach(node => childrenMap.set(node.id, { trueBranch: [], falseBranch: [], default: [] }));
+  private buildExecutionTree(nodes: Node<FlowNodeData>[], edges: Edge[]): Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; default: string[] }> {
+    const childrenMap = new Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; default: string[] }>();
+    nodes.forEach(node => childrenMap.set(node.id, { trueBranch: [], falseBranch: [], bodyBranch: [], doneBranch: [], default: [] }));
     edges.forEach(edge => {
       const entry = childrenMap.get(edge.source);
       if (!entry) return;
@@ -429,6 +464,16 @@ class Executor {
           entry.trueBranch.push(edge.target);
         } else {
           entry.falseBranch.push(edge.target);
+        }
+      } else if (sourceNode?.data.type === 'while' || sourceNode?.data.type === 'foreach') {
+        if (edge.sourceHandle === 'body') {
+          entry.bodyBranch.push(edge.target);
+        } else if (edge.sourceHandle === 'done') {
+          entry.doneBranch.push(edge.target);
+        } else if (entry.bodyBranch.length === 0) {
+          entry.bodyBranch.push(edge.target);
+        } else {
+          entry.doneBranch.push(edge.target);
         }
       } else {
         entry.default.push(edge.target);
