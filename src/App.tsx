@@ -11,6 +11,7 @@ import NodeConfigPanel from './components/NodeConfigPanel';
 import LogPanel from './components/LogPanel';
 import Toolbar from './components/Toolbar';
 import CodePreview from './components/CodePreview';
+import QuickNodePicker from './components/QuickNodePicker';
 import { executor } from './engine/executor';
 import type { ExecutionLog } from './engine/executor';
 import { generatePlaywrightCode } from './engine/codeGenerator';
@@ -29,6 +30,23 @@ function getNodeId() {
   return `node-${++nodeIdCounter}`;
 }
 
+type PickerMode = 'after' | 'between';
+
+interface PickerState {
+  show: boolean;
+  position: { x: number; y: number };
+  mode: PickerMode;
+  sourceId: string;
+  targetId?: string;
+}
+
+const initialPickerState: PickerState = {
+  show: false,
+  position: { x: 0, y: 0 },
+  mode: 'after',
+  sourceId: '',
+};
+
 function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -39,6 +57,8 @@ function App() {
   const [showCode, setShowCode] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');
   const [serverConnected, setServerConnected] = useState(false);
+  const [picker, setPicker] = useState<PickerState>(initialPickerState);
+
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
   const { recordHistory, undo, redo, canUndo, canRedo } = useUndoRedo(nodes, edges, setNodes, setEdges);
@@ -61,6 +81,64 @@ function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [undo, redo]);
+
+  useEffect(() => {
+    const handleQuickAdd = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setPicker({
+        show: true,
+        position: { x: detail.clientX + 10, y: detail.clientY + 10 },
+        mode: 'after',
+        sourceId: detail.nodeId,
+      });
+    };
+
+    const handleQuickInsert = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setPicker({
+        show: true,
+        position: { x: detail.clientX + 10, y: detail.clientY + 10 },
+        mode: 'between',
+        sourceId: detail.sourceId,
+        targetId: detail.targetId,
+      });
+    };
+
+    window.addEventListener('quick-add-node', handleQuickAdd);
+    window.addEventListener('quick-insert-node', handleQuickInsert);
+    return () => {
+      window.removeEventListener('quick-add-node', handleQuickAdd);
+      window.removeEventListener('quick-insert-node', handleQuickInsert);
+    };
+  }, []);
+
+  const createNode = useCallback(
+    (type: string, position: { x: number; y: number }): Node<FlowNodeData> => {
+      const def = getNodeDefinition(type);
+      if (!def) {
+        throw new Error(`Unknown node type: ${type}`);
+      }
+
+      const params: Record<string, string | number | boolean> = {};
+      def.parameters.forEach((param) => {
+        params[param.name] = param.defaultValue ?? '';
+      });
+
+      return {
+        id: getNodeId(),
+        type: 'custom',
+        position,
+        data: {
+          label: def.label,
+          type: def.type,
+          parameters: params,
+          icon: def.icon,
+          color: def.color,
+        },
+      };
+    },
+    []
+  );
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -88,31 +166,14 @@ function App() {
       if (!rect) return;
 
       const position = {
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
+        x: event.clientX - rect.left - 50,
+        y: event.clientY - rect.top - 30,
       };
 
-      const params: Record<string, string | number | boolean> = {};
-      def.parameters.forEach((param) => {
-        params[param.name] = param.defaultValue ?? '';
-      });
-
-      const newNode: Node<FlowNodeData> = {
-        id: getNodeId(),
-        type: 'custom',
-        position,
-        data: {
-          label: def.label,
-          type: def.type,
-          parameters: params,
-          icon: def.icon,
-          color: def.color,
-        },
-      };
-
+      const newNode = createNode(type, position);
       setNodes((nds) => [...nds, newNode]);
     },
-    [setNodes]
+    [createNode, setNodes]
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -123,6 +184,67 @@ function App() {
   const onNodeDoubleClick = useCallback((_: React.MouseEvent, node: Node<FlowNodeData>) => {
     setSelectedNode(node);
   }, []);
+
+  const handlePickerSelect = useCallback(
+    (nodeType: string) => {
+      if (picker.mode === 'after' && picker.sourceId) {
+        const sourceNode = nodes.find((n) => n.id === picker.sourceId);
+        const newPosition = sourceNode
+          ? { x: sourceNode.position.x + 20, y: sourceNode.position.y + 80 }
+          : { x: 100, y: 100 };
+
+        const newNode = createNode(nodeType, newPosition);
+
+        setNodes((nds) => [...nds, newNode]);
+        setEdges((eds) => [
+          ...eds,
+          {
+            id: `edge-${Date.now()}`,
+            source: picker.sourceId,
+            target: newNode.id,
+            animated: true,
+          },
+        ]);
+      } else if (picker.mode === 'between' && picker.sourceId && picker.targetId) {
+        const sourceNode = nodes.find((n) => n.id === picker.sourceId);
+        const targetNode = nodes.find((n) => n.id === picker.targetId);
+        const newPosition =
+          sourceNode && targetNode
+            ? {
+                x: (sourceNode.position.x + targetNode.position.x) / 2 + 10,
+                y: (sourceNode.position.y + targetNode.position.y) / 2 + 10,
+              }
+            : { x: 100, y: 100 };
+
+        const newNode = createNode(nodeType, newPosition);
+
+        setNodes((nds) => [...nds, newNode]);
+        setEdges((eds) => {
+          const filtered = eds.filter(
+            (e) => !(e.source === picker.sourceId && e.target === picker.targetId)
+          );
+          return [
+            ...filtered,
+            {
+              id: `edge-${Date.now()}-a`,
+              source: picker.sourceId,
+              target: newNode.id,
+              animated: true,
+            },
+            {
+              id: `edge-${Date.now()}-b`,
+              source: newNode.id,
+              target: picker.targetId,
+              animated: true,
+            },
+          ];
+        });
+      }
+
+      setPicker(initialPickerState);
+    },
+    [picker, nodes, createNode, setNodes, setEdges]
+  );
 
   const onSaveNodeConfig = useCallback(
     (nodeId: string, data: FlowNodeData) => {
@@ -277,6 +399,14 @@ function App() {
 
         {showCode && (
           <CodePreview code={generatedCode} onClose={() => setShowCode(false)} />
+        )}
+
+        {picker.show && (
+          <QuickNodePicker
+            position={picker.position}
+            onSelect={handlePickerSelect}
+            onClose={() => setPicker(initialPickerState)}
+          />
         )}
       </div>
     </ReactFlowProvider>

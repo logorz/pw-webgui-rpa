@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import type { FlowNodeData } from '../types/nodes';
@@ -19,6 +19,7 @@ import {
   Eye,
   Database,
   Settings,
+  Plus,
 } from 'lucide-react';
 
 const iconMap: Record<string, React.ElementType> = {
@@ -39,14 +40,27 @@ const iconMap: Record<string, React.ElementType> = {
   Database,
 };
 
-function CustomNode({ data, selected }: NodeProps<FlowNodeData>) {
+function CustomNode({ data, selected, id }: NodeProps<FlowNodeData>) {
   const Icon = iconMap[data.icon || 'Globe'] || Globe;
   const isExecuting = data.isExecuting;
+  const [isHovered, setIsHovered] = useState(false);
+
+  const handleQuickAddClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const event = new CustomEvent('quick-add-node', {
+      detail: { nodeId: id, clientX: e.clientX, clientY: e.clientY },
+      bubbles: true,
+    });
+    window.dispatchEvent(event);
+  }, [id]);
 
   return (
     <div
       className={`custom-node ${selected ? 'selected' : ''} ${isExecuting ? 'executing' : ''}`}
       style={{ borderColor: data.color || '#3b82f6' }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       <Handle
         type="target"
@@ -92,6 +106,17 @@ function CustomNode({ data, selected }: NodeProps<FlowNodeData>) {
         className="node-handle"
         style={{ background: data.color || '#3b82f6' }}
       />
+
+      {isHovered && (
+        <div
+          className="quick-add-btn"
+          onClick={handleQuickAddClick}
+          style={{ borderColor: data.color || '#3b82f6' }}
+          title="点击添加下一步指令"
+        >
+          <Plus size={16} />
+        </div>
+      )}
     </div>
   );
 }

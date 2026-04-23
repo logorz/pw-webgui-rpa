@@ -1,23 +1,17 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useMemo } from 'react';
 import {
   ReactFlow,
   Background,
   Controls,
   MiniMap,
-  useNodesState,
-  useEdgesState,
-  addEdge,
   ReactFlowProvider,
   Panel,
 } from '@xyflow/react';
 import type { Connection, Edge, Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import CustomNode from './CustomNode';
+import CustomEdge from './CustomEdge';
 import type { FlowNodeData } from '../types/nodes';
-
-const nodeTypes = {
-  custom: CustomNode,
-};
 
 interface FlowCanvasProps {
   nodes: Node<FlowNodeData>[];
@@ -30,6 +24,9 @@ interface FlowCanvasProps {
   onDragOver: (event: React.DragEvent) => void;
   executingNodeId?: string | null;
 }
+
+const nodeTypes = { custom: CustomNode };
+const edgeTypes = { default: CustomEdge }
 
 function FlowCanvasInner({
   nodes,
@@ -61,16 +58,22 @@ function FlowCanvasInner({
     [onDragOver]
   );
 
+  const mappedNodes = useMemo(
+    () =>
+      nodes.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          isExecuting: node.id === executingNodeId,
+        },
+      })),
+    [nodes, executingNodeId]
+  );
+
   return (
     <div ref={reactFlowWrapper} style={{ width: '100%', height: '100%' }}>
       <ReactFlow
-        nodes={nodes.map((node) => ({
-          ...node,
-          data: {
-            ...node.data,
-            isExecuting: node.id === executingNodeId,
-          },
-        }))}
+        nodes={mappedNodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
@@ -79,6 +82,7 @@ function FlowCanvasInner({
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         fitView
         deleteKeyCode={['Backspace', 'Delete']}
         selectionKeyCode="Shift"
