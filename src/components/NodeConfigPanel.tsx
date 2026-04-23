@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X, Save } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { X, Save, Variable } from 'lucide-react';
 import type { Node } from '@xyflow/react';
 import type { FlowNodeData, NodeParameter } from '../types/nodes';
 import { getNodeDefinition } from '../types/nodes';
@@ -8,18 +8,34 @@ interface NodeConfigPanelProps {
   node: Node<FlowNodeData> | null;
   onClose: () => void;
   onSave: (nodeId: string, data: FlowNodeData) => void;
+  allVariables?: string[];
+}
+
+function resolveVariableRef(value: string, variables: string[]): string[] {
+  const matches = value.match(/\$\{(\w+)\}/g);
+  if (!matches) return [];
+  return matches.map(m => m.slice(2, -1)).filter(v => variables.includes(v));
 }
 
 function ParameterField({
   param,
   value,
   onChange,
+  allVariables,
 }: {
   param: NodeParameter;
   value: string | number | boolean;
   onChange: (value: string | number | boolean) => void;
+  allVariables: string[];
 }) {
   const inputId = `param-${param.name}`;
+  const isVariableType = param.type === 'variable';
+
+  const insertVariable = (varName: string) => {
+    const current = String(value || '');
+    const newValue = current + `\${${varName}}`;
+    onChange(newValue);
+  };
 
   switch (param.type) {
     case 'boolean':
@@ -103,6 +119,56 @@ function ParameterField({
         </div>
       );
 
+    case 'variable':
+      return (
+        <div className="param-field">
+          <label className="param-label" htmlFor={inputId}>
+            {param.label}
+            {param.required && <span className="required">*</span>}
+            {isVariableType && <span className="variable-badge">支持变量</span>}
+          </label>
+          <div className="param-variable-input">
+            <input
+              id={inputId}
+              type="text"
+              value={String(value || '')}
+              onChange={(e) => onChange(e.target.value)}
+              className="param-input"
+              placeholder={param.description || '输入值或使用 ${变量名} 引用变量'}
+            />
+            {allVariables.length > 0 && (
+              <div className="variable-dropdown">
+                <button
+                  type="button"
+                  className="variable-insert-btn"
+                  title="插入变量引用"
+                >
+                  <Variable size={14} />
+                </button>
+                <div className="variable-dropdown-menu">
+                  {allVariables.map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      className="variable-dropdown-item"
+                      onClick={() => insertVariable(v)}
+                    >
+                      ${`{${v}}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          {param.description && <div className="param-desc">{param.description}</div>}
+          {isVariableType && String(value).includes('${') && (
+            <div className="variable-preview">
+              预览: {String(value).replace(/\$\{(\w+)\}/g, (_, name) => `<${name}>`)}
+            </div>
+          )}
+        </div>
+      );
+
     default:
       return (
         <div className="param-field">
@@ -124,7 +190,7 @@ function ParameterField({
   }
 }
 
-export default function NodeConfigPanel({ node, onClose, onSave }: NodeConfigPanelProps) {
+export default function NodeConfigPanel({ node, onClose, onSave, allVariables = [] }: NodeConfigPanelProps) {
   const [parameters, setParameters] = useState<Record<string, string | number | boolean>>({});
   const definition = node ? getNodeDefinition(node.data.type) : null;
 
@@ -133,6 +199,10 @@ export default function NodeConfigPanel({ node, onClose, onSave }: NodeConfigPan
       setParameters({ ...node.data.parameters });
     }
   }, [node]);
+
+  const collectedVariables = useMemo(() => {
+    return allVariables;
+  }, [allVariables]);
 
   if (!node || !definition) return null;
 
@@ -173,6 +243,7 @@ export default function NodeConfigPanel({ node, onClose, onSave }: NodeConfigPan
                 param={param}
                 value={parameters[param.name] ?? param.defaultValue ?? ''}
                 onChange={(value) => handleParamChange(param.name, value)}
+                allVariables={collectedVariables}
               />
             ))}
           </div>

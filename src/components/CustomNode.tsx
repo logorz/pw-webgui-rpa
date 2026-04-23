@@ -18,6 +18,13 @@ import {
   Variable,
   Eye,
   Database,
+  CheckSquare,
+  Upload,
+  Save,
+  Key,
+  Code,
+  Hash,
+  Tag,
   Settings,
   Plus,
 } from 'lucide-react';
@@ -38,6 +45,13 @@ const iconMap: Record<string, React.ElementType> = {
   Variable,
   Eye,
   Database,
+  CheckSquare,
+  Upload,
+  Save,
+  Key,
+  Code,
+  Hash,
+  Tag,
 };
 
 function CustomNode({ data, selected, id }: NodeProps<FlowNodeData>) {

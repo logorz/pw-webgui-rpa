@@ -15,6 +15,13 @@ import {
   Variable,
   Eye,
   Database,
+  CheckSquare,
+  Upload,
+  Save,
+  Key,
+  Code,
+  Hash,
+  Tag,
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
@@ -37,14 +44,23 @@ const iconMap: Record<string, React.ElementType> = {
   Variable,
   Eye,
   Database,
+  CheckSquare,
+  Upload,
+  Save,
+  Key,
+  Code,
+  Hash,
+  Tag,
 };
 
-type CategoryKey = 'browser' | 'control' | 'variable';
+type CategoryKey = 'browser' | 'interaction' | 'control' | 'variable' | 'assertion';
 
 const categoryConfig: Record<CategoryKey, { label: string; color: string }> = {
   browser: { label: '浏览器操作', color: '#3b82f6' },
+  interaction: { label: '交互操作', color: '#8b5cf6' },
   control: { label: '流程控制', color: '#f59e0b' },
   variable: { label: '变量数据', color: '#10b981' },
+  assertion: { label: '断言验证', color: '#ef4444' },
 };
 
 interface NodePanelProps {
@@ -75,13 +91,17 @@ function DraggableNodeItem({ node, onDragStart }: { node: NodeTypeDefinition; on
 function CategorySection({
   category,
   onDragStart,
+  defaultExpanded,
 }: {
   category: CategoryKey;
   onDragStart: (event: React.DragEvent, nodeType: string) => void;
+  defaultExpanded?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(defaultExpanded ?? true);
   const nodes = getNodesByCategory(category);
   const config = categoryConfig[category];
+
+  if (nodes.length === 0) return null;
 
   return (
     <div className="category-section">
@@ -116,8 +136,10 @@ export default function NodePanel({ onDragStart }: NodePanelProps) {
       </div>
       <div className="node-panel-content">
         <CategorySection category="browser" onDragStart={onDragStart} />
+        <CategorySection category="interaction" onDragStart={onDragStart} />
         <CategorySection category="control" onDragStart={onDragStart} />
         <CategorySection category="variable" onDragStart={onDragStart} />
+        <CategorySection category="assertion" onDragStart={onDragStart} defaultExpanded={false} />
       </div>
     </div>
   );

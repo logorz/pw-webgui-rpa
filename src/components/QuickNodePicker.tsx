@@ -51,15 +51,21 @@ export default function QuickNodePicker({
 
   const groupedNodes: Record<string, NodeTypeDefinition[]> = {
     '浏览器操作': [],
+    '交互操作': [],
     '流程控制': [],
     '变量数据': [],
+    '断言验证': [],
   };
 
   filteredNodes.forEach((node) => {
     if (node.category === 'browser') {
       groupedNodes['浏览器操作'].push(node);
+    } else if (node.category === 'interaction') {
+      groupedNodes['交互操作'].push(node);
     } else if (node.category === 'control') {
       groupedNodes['流程控制'].push(node);
+    } else if (node.category === 'assertion') {
+      groupedNodes['断言验证'].push(node);
     } else {
       groupedNodes['变量数据'].push(node);
     }

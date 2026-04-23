@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { addEdge, useNodesState, useEdgesState, ReactFlowProvider } from '@xyflow/react';
 import type { Node, Edge, Connection } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -345,6 +345,29 @@ function App() {
     setLogs([]);
   }, [setNodes, setEdges]);
 
+  const collectedVariables = useMemo(() => {
+    const vars: string[] = [];
+    nodes.forEach((node) => {
+      if (node.data.type === 'setVariable' && node.data.parameters.name) {
+        const name = String(node.data.parameters.name);
+        if (name && !vars.includes(name)) vars.push(name);
+      }
+      if (node.data.type === 'extract' && node.data.parameters.variableName) {
+        const name = String(node.data.parameters.variableName);
+        if (name && !vars.includes(name)) vars.push(name);
+      }
+      if (node.data.type === 'evaluate' && node.data.parameters.variableName) {
+        const name = String(node.data.parameters.variableName);
+        if (name && !vars.includes(name)) vars.push(name);
+      }
+      if (node.data.type === 'foreach' && node.data.parameters.variableName) {
+        const name = String(node.data.parameters.variableName);
+        if (name && !vars.includes(name)) vars.push(name);
+      }
+    });
+    return vars;
+  }, [nodes]);
+
   return (
     <ReactFlowProvider>
       <div className="app">
@@ -394,6 +417,7 @@ function App() {
             node={selectedNode}
             onClose={() => setSelectedNode(null)}
             onSave={onSaveNodeConfig}
+            allVariables={collectedVariables}
           />
         )}
 
