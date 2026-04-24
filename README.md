@@ -1,39 +1,86 @@
-# pw-webgui-rpa
+# Playwright CLI GUI
 
-基于 React Flow 和 Playwright 的可视化 RPA 流程编辑器。
+基于 **React Flow** 和 **Playwright** 的可视化 RPA 流程编辑器。通过拖拽节点的方式构建浏览器自动化流程，支持真实 Playwright 执行和代码生成。
 
 ## 功能特性
 
-- ✅ **拖拽式节点编辑** - 15 种预定义节点类型，包括浏览器操作、流程控制和变量操作
-- ✅ **真实 Playwright 执行** - 支持模拟执行和真实浏览器执行
-- ✅ **代码生成** - 一键生成可运行的 Playwright JavaScript 代码
-- ✅ **条件控制** - 支持 if/while/foreach 节点
-- ✅ **工作流保存** - 本地存储和 JSON 文件导入/导出
-- ✅ **撤销/重做** - 支持 50 步历史记录
-- ✅ **实时执行日志** - 可视化执行过程和结果
-- ✅ **服务状态检测** - 自动降级为模拟模式
+- 🎨 **可视化流程编辑** — 40+ 种节点类型，涵盖浏览器操作、流程控制、变量数据操作
+- 🖱️ **拖拽式操作** — 从节点面板拖拽到画布，支持节点间快速插入和追加
+- 🌐 **页面探索器** — 打开目标网页，自动检测元素并生成操作节点
+- 🚀 **真实 Playwright 执行** — 连接 Node.js 执行服务器，在真实浏览器中运行流程
+- 💻 **代码生成** — 一键生成可运行的 Playwright JavaScript 代码
+- 📁 **工程文件系统** — 使用 `.pwg` 格式保存/加载工程，支持最近文件记录
+- ↩️ **撤销/重做** — 支持多步历史记录
+- 📋 **实时执行日志** — 可视化执行过程与结果
+- 🔌 **服务状态检测** — 执行服务器断开时自动降级为模拟模式
+
+## 路由
+
+| 路径 | 页面 | 说明 |
+|------|------|------|
+| `/` | 首页 | 工程管理：新建、打开、导入、最近文件 |
+| `/editor` | 编辑器 | 可视化流程编辑主界面 |
 
 ## 节点类型
 
 ### 浏览器操作
-- 打开浏览器 - 启动浏览器并可选导航到 URL
-- 跳转页面 - 导航到指定 URL
-- 点击元素 - 点击页面上的元素
-- 填充输入 - 填充输入框内容
-- 输入文本 - 模拟键盘输入
-- 截图 - 保存页面截图
-- 等待元素 - 等待元素出现
-- 等待时间 - 固定等待时长
-- 关闭浏览器 - 关闭浏览器实例
+| 节点 | 说明 |
+|------|------|
+| 打开浏览器 | 启动浏览器并可选导航到 URL |
+| 跳转页面 | 导航到指定 URL |
+| 点击元素 | 点击页面元素 |
+| 填充输入 | 填充输入框内容 |
+| 输入文本 | 模拟键盘输入 |
+| 选择选项 | 选择下拉框选项 |
+| 勾选/取消勾选 | 操作 checkbox |
+| 截图 | 保存页面截图 |
+| 等待元素 | 等待元素出现 |
+| 等待时间 | 固定等待时长 |
+| 执行脚本 | 在页面中执行 JavaScript |
+| 获取文本 | 提取元素文本内容 |
+| 获取属性 | 提取元素属性值 |
+| 滚动 | 滚动页面 |
+| 悬停 | 鼠标悬停元素 |
+| 键盘操作 | 模拟键盘按键 |
+| 上传文件 | 上传文件到 input |
+| 新建页面 | 创建新页面/标签页 |
+| 切换页面 | 切换浏览器页面 |
+| 关闭页面 | 关闭当前页面 |
+| 断言 | 验证页面状态 |
+| 关闭浏览器 | 关闭浏览器实例 |
+
+### 表单操作
+| 节点 | 说明 |
+|------|------|
+| 单选 | 操作 radio button |
+| 下拉选择 | 选择 select 选项 |
+
+### 网络控制
+| 节点 | 说明 |
+|------|------|
+| 拦截请求 | 拦截并修改网络请求 |
+| 等待请求 | 等待特定请求完成 |
+| 等待响应 | 等待特定响应返回 |
 
 ### 流程控制
-- 条件判断 - if/else 分支
-- 循环执行 - while 循环
-- 遍历元素 - foreach 遍历选择器
+| 节点 | 说明 |
+|------|------|
+| 条件判断 | if/else 分支（支持变量表达式） |
+| 循环执行 | while 循环 |
+| 遍历元素 | foreach 遍历元素集合 |
+| 子流程 | 调用子流程 |
+| 延迟 | 延迟执行 |
+| 分支 | 创建并行执行分支 |
+| 合并分支 | 合并多个分支 |
 
-### 变量数据
-- 设置变量 - 定义变量
-- 提取内容 - 从页面提取内容到变量
+### 变量与数据
+| 节点 | 说明 |
+|------|------|
+| 设置变量 | 定义/修改变量 |
+| 提取内容 | 从页面提取内容到变量 |
+| 执行脚本 | 执行 JavaScript 并返回结果 |
+| 日志输出 | 输出日志信息 |
+| 条件分支 | 基于条件的多路分支 |
 
 ## 快速开始
 
@@ -47,62 +94,88 @@ npx playwright install chromium
 # 启动执行服务器
 npm run server
 
-# 启动前端开发服务器（新终端）
+# 启动前端开发服务器
 npm run dev
 
-# 或同时启动前端和服务器
+# 或同时启动
 npm run dev:all
 ```
 
-访问 http://localhost:5173 即可使用编辑器。
+启动后访问：
+- **首页** → http://localhost:5173/
+- **编辑器** → http://localhost:5173/editor
 
 ## 使用流程
 
-1. 从左侧节点面板拖拽节点到画布
-2. 双击节点配置参数
-3. 连接节点创建工作流
-4. 点击"运行"按钮执行流程
-5. 点击"生成代码"查看 Playwright 代码
+1. 在首页点击 **新建工程** 或 **打开文件**
+2. 从左侧节点面板拖拽节点到画布
+3. 双击节点配置参数（支持变量引用 `${变量名}`）
+4. 连接节点创建工作流
+5. 点击 **运行** 执行流程
+6. 点击 **探索** 使用页面探索器生成节点
+7. 点击 **生成代码** 查看 Playwright 代码
+
+### 快捷操作
+
+- **Ctrl+Z** — 撤销
+- **Ctrl+Shift+Z** — 重做
+- **Ctrl+S** — 保存
+- 点击节点下方的 **⊕** 按钮 — 快速追加节点
+- 点击连接线中间的 **⊕** 按钮 — 快速插入节点
 
 ## 项目结构
 
 ```
-pw-webgui-rpa/
 ├── src/
-│   ├── components/      # React 组件
-│   │   ├── NodePanel.tsx
-│   │   ├── FlowCanvas.tsx
-│   │   ├── CustomNode.tsx
-│   │   ├── NodeConfigPanel.tsx
-│   │   ├── LogPanel.tsx
-│   │   ├── Toolbar.tsx
-│   │   └── CodePreview.tsx
-│   ├── engine/          # 执行引擎
-│   │   ├── executor.ts
-│   │   └── codeGenerator.ts
-│   ├── hooks/           # 自定义 Hooks
-│   │   └── useUndoRedo.ts
-│   ├── types/           # 类型定义
-│   │   └── nodes.ts
-│   ├── utils/           # 工具函数
-│   │   └── persistence.ts
-│   ├── App.tsx
-│   ├── main.tsx
-│   └── index.css
+│   ├── components/          # UI 组件
+│   │   ├── CustomNode.tsx       # 自定义画布节点
+│   │   ├── CustomEdge.tsx       # 自定义连接线
+│   │   ├── FlowCanvas.tsx       # 画布容器
+│   │   ├── NodePanel.tsx        # 节点面板（可拖拽）
+│   │   ├── NodeConfigPanel.tsx  # 节点配置面板
+│   │   ├── Toolbar.tsx          # 顶部工具栏
+│   │   ├── LogPanel.tsx         # 执行日志面板
+│   │   ├── CodePreview.tsx      # 代码预览弹窗
+│   │   ├── QuickNodePicker.tsx  # 快速节点选择器
+│   │   ├── PageExplorer.tsx     # 页面探索器
+│   │   └── ErrorBoundary.tsx    # 错误边界
+│   ├── pages/               # 页面组件
+│   │   ├── HomePage.tsx         # 首页（工程管理）
+│   │   └── EditorPage.tsx       # 编辑器页面
+│   ├── engine/              # 执行引擎
+│   │   ├── executor.ts         # 流程执行器（模拟/真实 Playwright）
+│   │   ├── codeGenerator.ts    # Playwright 代码生成
+│   │   └── graphUtils.ts       # 图操作工具函数
+│   ├── hooks/               # 自定义 Hooks
+│   │   ├── useUndoRedo.ts      # 撤销/重做
+│   │   └── useProjectFile.ts   # 工程文件管理
+│   ├── types/               # 类型定义
+│   │   ├── nodes.ts            # 节点类型与定义
+│   │   └── project.ts          # 工程文件类型
+│   ├── utils/               # 工具函数
+│   │   ├── persistence.ts      # 导入/导出 JSON
+│   │   └── projectStorage.ts   # 文件系统存储
+│   ├── App.tsx              # 应用入口（路由）
+│   ├── App.css              # 编辑器样式
+│   ├── index.css            # 全局样式（含 Tailwind）
+│   └── main.tsx             # 挂载入口
 ├── server/
-│   └── execution-server.mjs  # Playwright 执行服务
-└── package.json
+│   └── execution-server.mjs    # Playwright 执行服务
+└── specs/001-project-file-system/  # 工程文件系统设计文档
 ```
 
 ## 技术栈
 
-- React 19
-- Vite
-- TypeScript
-- @xyflow/react (React Flow)
-- Tailwind CSS
-- Playwright
-- Lucide React (图标)
+| 技术 | 用途 |
+|------|------|
+| **React 19** | UI 框架 |
+| **Vite 8** | 构建工具 |
+| **TypeScript** | 类型安全 |
+| **@xyflow/react** | 可视化流程编辑器 |
+| **Tailwind CSS v4** | 样式框架 |
+| **Playwright** | 浏览器自动化 |
+| **wouter** | 客户端路由 |
+| **Lucide React** | 图标库 |
 
 ## 许可证
 
