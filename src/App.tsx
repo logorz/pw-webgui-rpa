@@ -12,8 +12,10 @@ import LogPanel from './components/LogPanel';
 import Toolbar from './components/Toolbar';
 import CodePreview from './components/CodePreview';
 import QuickNodePicker from './components/QuickNodePicker';
+import PageExplorer from './components/PageExplorer';
 import { executor } from './engine/executor';
 import type { ExecutionLog } from './engine/executor';
+import type { PendingAction } from './components/PageExplorer';
 import { generatePlaywrightCode } from './engine/codeGenerator';
 import {
   saveFlow,
@@ -60,6 +62,7 @@ function App() {
   const [generatedCode, setGeneratedCode] = useState('');
   const [serverConnected, setServerConnected] = useState(false);
   const [picker, setPicker] = useState<PickerState>(initialPickerState);
+  const [showExplorer, setShowExplorer] = useState(false);
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
@@ -359,6 +362,84 @@ function App() {
     setLogs([]);
   }, [setNodes, setEdges]);
 
+  const handleExplorerGenerateNodes = useCallback(
+    (actions: PendingAction[]) => {
+      if (actions.length === 0) return;
+
+      const newNodes: Node<FlowNodeData>[] = [];
+      const newEdges: Edge[] = [];
+      let lastNodeId: string | null = null;
+
+      const lastExistingNode = nodes.length > 0 ? nodes[nodes.length - 1] : null;
+      if (lastExistingNode) {
+        lastNodeId = lastExistingNode.id;
+      }
+
+      const startX = lastExistingNode ? lastExistingNode.position.x : 100;
+      const startY = lastExistingNode ? lastExistingNode.position.y + 100 : 100;
+
+      const needOpenNode = !nodes.some(n => n.data.type === 'open' || n.data.type === 'goto');
+      if (needOpenNode && actions.length > 0) {
+        const openDef = getNodeDefinition('open');
+        if (openDef) {
+          const openParams: Record<string, string | number | boolean> = {};
+          openDef.parameters.forEach(p => { openParams[p.name] = p.defaultValue ?? ''; });
+          openParams.url = actions[0].element.href || '';
+          openParams.headless = 'false';
+          const openNode: Node<FlowNodeData> = {
+            id: getNodeId(),
+            type: 'custom',
+            position: { x: startX, y: startY },
+            data: { label: openDef.label, type: 'open', parameters: openParams, icon: openDef.icon, color: openDef.color },
+          };
+          newNodes.push(openNode);
+          if (lastNodeId) {
+            newEdges.push({ id: `edge-${Date.now()}-exp-open`, source: lastNodeId, target: openNode.id, animated: true });
+          }
+          lastNodeId = openNode.id;
+        }
+      }
+
+      actions.forEach((action, idx) => {
+        const nodeType = action.nodeType === 'check' ? 'checkbox' : action.nodeType === 'uncheck' ? 'checkbox' : action.nodeType;
+        const def = getNodeDefinition(nodeType);
+        if (!def) return;
+
+        const params: Record<string, string | number | boolean> = {};
+        def.parameters.forEach(p => { params[p.name] = p.defaultValue ?? ''; });
+
+        params.selector = action.element.selector;
+
+        if (action.nodeType === 'fill' || action.nodeType === 'type') {
+          params.value = action.value || '';
+        } else if (action.nodeType === 'selectOption') {
+          params.value = action.value || '';
+        } else if (action.nodeType === 'check') {
+          params.action = 'check';
+        } else if (action.nodeType === 'uncheck') {
+          params.action = 'uncheck';
+        }
+
+        const node: Node<FlowNodeData> = {
+          id: getNodeId(),
+          type: 'custom',
+          position: { x: startX + (needOpenNode ? 20 : 0), y: startY + (needOpenNode ? 100 : 0) + idx * 100 },
+          data: { label: def.label, type: def.type, parameters: params, icon: def.icon, color: def.color },
+        };
+        newNodes.push(node);
+
+        if (lastNodeId) {
+          newEdges.push({ id: `edge-${Date.now()}-exp-${idx}`, source: lastNodeId, target: node.id, animated: true });
+        }
+        lastNodeId = node.id;
+      });
+
+      setNodes(prev => [...prev, ...newNodes]);
+      setEdges(prev => [...prev, ...newEdges]);
+    },
+    [nodes, setNodes, setEdges]
+  );
+
   const collectedVariables = useMemo(() => {
     const vars: string[] = [];
     nodes.forEach((node) => {
@@ -400,6 +481,8 @@ function App() {
           serverConnected={serverConnected}
           canUndo={canUndo}
           canRedo={canRedo}
+          onToggleExplorer={() => setShowExplorer(prev => !prev)}
+          showExplorer={showExplorer}
         />
 
         <div className="app-body" ref={reactFlowWrapper}>
@@ -420,6 +503,15 @@ function App() {
               executingNodeId={executingNodeId}
             />
           </div>
+
+          {showExplorer && (
+            <div className="app-explorer">
+              <PageExplorer
+                onGenerateNodes={handleExplorerGenerateNodes}
+                onClose={() => setShowExplorer(false)}
+              />
+            </div>
+          )}
 
           <div className="app-log">
             <LogPanel logs={logs} isExecuting={isExecuting} />

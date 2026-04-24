@@ -34,6 +34,10 @@ import {
   Activity,
   Layers,
   Loader,
+  Shield,
+  SkipForward,
+  Workflow,
+  Terminal,
 } from 'lucide-react';
 
 const iconMap: Record<string, React.ElementType> = {
@@ -66,6 +70,10 @@ const iconMap: Record<string, React.ElementType> = {
   Activity,
   Layers,
   Loader,
+  Shield,
+  SkipForward,
+  Workflow,
+  Terminal,
 };
 
 function renderParamValue(value: string): React.ReactNode[] {
@@ -199,6 +207,39 @@ function CustomNode({ data, selected, id }: NodeProps<FlowNodeData>) {
             <span className="branch-label branch-done">结束</span>
           </div>
         </>
+      ) : data.type === 'tryCatch' ? (
+        <>
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="try"
+            className="node-handle node-handle-try"
+            style={{ background: '#3b82f6', left: '20%' }}
+          />
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="catch"
+            className="node-handle node-handle-catch"
+            style={{ background: '#ef4444', left: '50%' }}
+          />
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="done"
+            className="node-handle node-handle-done"
+            style={{ background: '#64748b', left: '80%' }}
+          />
+          <div className="if-branch-labels">
+            <span className="branch-label branch-try">尝试</span>
+            <span className="branch-label branch-catch">捕获</span>
+            <span className="branch-label branch-done">继续</span>
+          </div>
+        </>
+      ) : data.type === 'breakLoop' ? (
+        <div className="if-branch-labels">
+          <span className="branch-label" style={{ color: '#f59e0b', fontSize: '9px' }}>⤴ 跳出循环</span>
+        </div>
       ) : (
         <Handle
           type="source"

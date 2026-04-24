@@ -463,6 +463,34 @@ function generateNodeCode(node: Node<FlowNodeData>, indent: string, variables: S
       break;
     }
 
+    case 'tryCatch': {
+      break;
+    }
+
+    case 'breakLoop': {
+      lines.push(`${indent}break;`);
+      break;
+    }
+
+    case 'log': {
+      const message = resolveVar(p.message || "''", variables);
+      const level = p.level || 'info';
+      if (level === 'warn') {
+        lines.push(`${indent}console.warn(${message});`);
+      } else if (level === 'error') {
+        lines.push(`${indent}console.error(${message});`);
+      } else {
+        lines.push(`${indent}console.log(${message});`);
+      }
+      break;
+    }
+
+    case 'callSubflow': {
+      const flowName = p.flowName || '';
+      lines.push(`${indent}// Call sub-flow: ${esc(flowName)}`);
+      break;
+    }
+
     default:
       lines.push(`${indent}// TODO: Implement ${node.data.type}`);
   }
@@ -470,11 +498,11 @@ function generateNodeCode(node: Node<FlowNodeData>, indent: string, variables: S
   return lines.join('\n');
 }
 
-function buildExecutionTree(nodes: Node<FlowNodeData>[], edges: Edge[]): Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; default: string[] }> {
-  const childrenMap = new Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; default: string[] }>();
+function buildExecutionTree(nodes: Node<FlowNodeData>[], edges: Edge[]): Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; tryBranch: string[]; catchBranch: string[]; default: string[] }> {
+  const childrenMap = new Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; tryBranch: string[]; catchBranch: string[]; default: string[] }>();
 
   nodes.forEach(node => {
-    childrenMap.set(node.id, { trueBranch: [], falseBranch: [], bodyBranch: [], doneBranch: [], default: [] });
+    childrenMap.set(node.id, { trueBranch: [], falseBranch: [], bodyBranch: [], doneBranch: [], tryBranch: [], catchBranch: [], default: [] });
   });
 
   edges.forEach(edge => {
@@ -494,6 +522,20 @@ function buildExecutionTree(nodes: Node<FlowNodeData>[], edges: Edge[]): Map<str
         entry.doneBranch.push(edge.target);
       } else if (entry.bodyBranch.length === 0) {
         entry.bodyBranch.push(edge.target);
+      } else {
+        entry.doneBranch.push(edge.target);
+      }
+    } else if (sourceNode?.data.type === 'tryCatch') {
+      if (edge.sourceHandle === 'try') {
+        entry.tryBranch.push(edge.target);
+      } else if (edge.sourceHandle === 'catch') {
+        entry.catchBranch.push(edge.target);
+      } else if (edge.sourceHandle === 'done') {
+        entry.doneBranch.push(edge.target);
+      } else if (entry.tryBranch.length === 0) {
+        entry.tryBranch.push(edge.target);
+      } else if (entry.catchBranch.length === 0) {
+        entry.catchBranch.push(edge.target);
       } else {
         entry.doneBranch.push(edge.target);
       }
@@ -552,7 +594,7 @@ function generateConditionCode(params: Record<string, string | number | boolean>
 function generateRecursive(
   nodeId: string,
   nodes: Node<FlowNodeData>[],
-  childrenMap: Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; default: string[] }>,
+  childrenMap: Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; tryBranch: string[]; catchBranch: string[]; default: string[] }>,
   visited: Set<string>,
   indent: string,
   variables: Set<string>
@@ -610,6 +652,38 @@ function generateRecursive(
     children.doneBranch.forEach(childId => {
       lines.push(...generateRecursive(childId, nodes, childrenMap, new Set(visited), indent, variables));
     });
+  } else if (node.data.type === 'tryCatch') {
+    const errorVar = node.data.parameters.errorVariable || 'errorMessage';
+    variables.add(String(errorVar));
+    lines.push(`${indent}try {`);
+    children.tryBranch.forEach(childId => {
+      lines.push(...generateRecursive(childId, nodes, childrenMap, new Set(visited), indent + '  ', variables));
+    });
+    lines.push(`${indent}} catch (_error) {`);
+    lines.push(`${indent}  const ${errorVar} = _error.message;`);
+    children.catchBranch.forEach(childId => {
+      lines.push(...generateRecursive(childId, nodes, childrenMap, new Set(visited), indent + '  ', variables));
+    });
+    lines.push(`${indent}}`);
+    children.doneBranch.forEach(childId => {
+      lines.push(...generateRecursive(childId, nodes, childrenMap, new Set(visited), indent, variables));
+    });
+  } else if (node.data.type === 'breakLoop') {
+    lines.push(`${indent}break;`);
+  } else if (node.data.type === 'log') {
+    const message = resolveVar(p.message || "''", variables);
+    const level = p.level || 'info';
+    if (level === 'warn') {
+      lines.push(`${indent}console.warn(${message});`);
+    } else if (level === 'error') {
+      lines.push(`${indent}console.error(${message});`);
+    } else {
+      lines.push(`${indent}console.log(${message});`);
+    }
+  } else if (node.data.type === 'callSubflow') {
+    const flowName = p.flowName || '';
+    lines.push(`${indent}// TODO: Call sub-flow "${esc(flowName)}"`);
+    lines.push(`${indent}// Sub-flow execution requires the Playwright GUI runtime`);
   } else {
     children.default.forEach(childId => {
       lines.push(...generateRecursive(childId, nodes, childrenMap, visited, indent, variables));

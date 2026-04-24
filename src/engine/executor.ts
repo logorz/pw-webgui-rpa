@@ -1,6 +1,14 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { FlowNodeData } from '../types/nodes';
 import { getNodeDefinition } from '../types/nodes';
+import { loadCurrentFlow, getSavedFlows } from '../utils/persistence';
+
+class BreakSignal extends Error {
+  constructor() {
+    super('BREAK');
+    this.name = 'BreakSignal';
+  }
+}
 
 export interface ExecutionLog {
   id: string;
@@ -132,7 +140,7 @@ class Executor {
   private async executeNodeReal(
     nodeId: string,
     nodes: Node<FlowNodeData>[],
-    childrenMap: Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; default: string[] }>,
+    childrenMap: Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; tryBranch: string[]; catchBranch: string[]; default: string[] }>,
     visited: Set<string>,
     ctx: ExecutionContext
   ): Promise<void> {
@@ -190,8 +198,13 @@ class Executor {
         for (let i = 0; i < maxIterations; i++) {
           const condition = await this.evaluateConditionReal(node.data.parameters, ctx);
           if (!condition) break;
-          for (const childId of children.bodyBranch) {
-            await this.executeNodeReal(childId, nodes, childrenMap, new Set(visited), ctx);
+          try {
+            for (const childId of children.bodyBranch) {
+              await this.executeNodeReal(childId, nodes, childrenMap, new Set(visited), ctx);
+            }
+          } catch (e) {
+            if (e instanceof BreakSignal) break;
+            throw e;
           }
         }
         for (const childId of children.doneBranch) {
@@ -204,13 +217,68 @@ class Executor {
           const elements = await ctx.page.locator(selector).all();
           for (const el of elements) {
             ctx.variables[varName] = el;
-            for (const childId of children.bodyBranch) {
-              await this.executeNodeReal(childId, nodes, childrenMap, new Set(visited), ctx);
+            try {
+              for (const childId of children.bodyBranch) {
+                await this.executeNodeReal(childId, nodes, childrenMap, new Set(visited), ctx);
+              }
+            } catch (e) {
+              if (e instanceof BreakSignal) break;
+              throw e;
             }
           }
         }
         for (const childId of children.doneBranch) {
           await this.executeNodeReal(childId, nodes, childrenMap, new Set(visited), ctx);
+        }
+      } else if (node.data.type === 'tryCatch') {
+        const errorVar = String(node.data.parameters.errorVariable || 'errorMessage');
+        try {
+          for (const childId of children.tryBranch) {
+            await this.executeNodeReal(childId, nodes, childrenMap, new Set(visited), ctx);
+          }
+        } catch (e) {
+          ctx.variables[errorVar] = e instanceof Error ? e.message : String(e);
+          for (const childId of children.catchBranch) {
+            await this.executeNodeReal(childId, nodes, childrenMap, new Set(visited), ctx);
+          }
+        }
+        for (const childId of children.doneBranch) {
+          await this.executeNodeReal(childId, nodes, childrenMap, new Set(visited), ctx);
+        }
+      } else if (node.data.type === 'breakLoop') {
+        throw new BreakSignal();
+      } else if (node.data.type === 'log') {
+        const message = this.resolveVariables(
+          { message: node.data.parameters.message || '' },
+          ctx.variables
+        ).message;
+        const level = node.data.parameters.level || 'info';
+        this.addLog({
+          id: `log-${Date.now()}-${Math.random()}`,
+          nodeId,
+          nodeType: 'log',
+          nodeLabel: '输出日志',
+          status: level === 'error' ? 'error' : level === 'warn' ? 'running' : 'success',
+          message: `[${level.toUpperCase()}] ${message}`,
+          timestamp: Date.now(),
+          duration: 0,
+        });
+      } else if (node.data.type === 'callSubflow') {
+        const flowName = String(node.data.parameters.flowName || '');
+        if (!flowName) throw new Error('子流程名称不能为空');
+        const savedFlows = getSavedFlows();
+        const targetFlow = savedFlows.find(f => f.name === flowName);
+        if (!targetFlow) throw new Error(`未找到名为"${flowName}"的已保存流程`);
+        const flowData = JSON.parse(targetFlow.data);
+        if (flowData.nodes && flowData.edges) {
+          const subChildrenMap = this.buildExecutionTree(flowData.nodes, flowData.edges);
+          const subRootNodes = this.findRootNodes(flowData.nodes, flowData.edges);
+          if (subRootNodes.length === 0 && flowData.nodes.length > 0) {
+            subRootNodes.push(flowData.nodes[0]);
+          }
+          for (const root of subRootNodes) {
+            await this.executeNodeReal(root.id, flowData.nodes, subChildrenMap, new Set(), ctx);
+          }
         }
       } else {
         for (const childId of children.default) {
@@ -342,7 +410,7 @@ class Executor {
   private async executeNodeSimulated(
     nodeId: string,
     nodes: Node<FlowNodeData>[],
-    childrenMap: Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; default: string[] }>,
+    childrenMap: Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; tryBranch: string[]; catchBranch: string[]; default: string[] }>,
     visited: Set<string>
   ): Promise<void> {
     if (visited.has(nodeId)) return;
@@ -398,13 +466,57 @@ class Executor {
         for (let i = 0; i < Math.min(maxIterations, 2); i++) {
           const condition = this.evaluateConditionSimulated(node.data.parameters);
           if (!condition) break;
-          for (const childId of children.bodyBranch) {
+          try {
+            for (const childId of children.bodyBranch) {
+              await this.executeNodeSimulated(childId, nodes, childrenMap, new Set(visited));
+            }
+          } catch (e) {
+            if (e instanceof BreakSignal) break;
+            throw e;
+          }
+        }
+        for (const childId of children.doneBranch) {
+          await this.executeNodeSimulated(childId, nodes, childrenMap, new Set(visited));
+        }
+      } else if (node.data.type === 'tryCatch') {
+        try {
+          for (const childId of children.tryBranch) {
+            await this.executeNodeSimulated(childId, nodes, childrenMap, new Set(visited));
+          }
+        } catch {
+          for (const childId of children.catchBranch) {
             await this.executeNodeSimulated(childId, nodes, childrenMap, new Set(visited));
           }
         }
         for (const childId of children.doneBranch) {
           await this.executeNodeSimulated(childId, nodes, childrenMap, new Set(visited));
         }
+      } else if (node.data.type === 'breakLoop') {
+        throw new BreakSignal();
+      } else if (node.data.type === 'log') {
+        const message = String(node.data.parameters.message || '');
+        const level = node.data.parameters.level || 'info';
+        this.addLog({
+          id: `log-sim-${Date.now()}-${Math.random()}`,
+          nodeId,
+          nodeType: 'log',
+          nodeLabel: '输出日志',
+          status: level === 'error' ? 'error' : level === 'warn' ? 'running' : 'success',
+          message: `[模拟] [${level.toUpperCase()}] ${message}`,
+          timestamp: Date.now(),
+          duration: 0,
+        });
+      } else if (node.data.type === 'callSubflow') {
+        this.addLog({
+          id: `log-sim-${Date.now()}-${Math.random()}`,
+          nodeId,
+          nodeType: 'callSubflow',
+          nodeLabel: '调用子流程',
+          status: 'success',
+          message: `[模拟] 调用子流程: ${node.data.parameters.flowName || '(未命名)'}`,
+          timestamp: Date.now(),
+          duration: 0,
+        });
       } else {
         for (const childId of children.default) {
           await this.executeNodeSimulated(childId, nodes, childrenMap, visited);
@@ -452,9 +564,9 @@ class Executor {
     this.abortController?.abort();
   }
 
-  private buildExecutionTree(nodes: Node<FlowNodeData>[], edges: Edge[]): Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; default: string[] }> {
-    const childrenMap = new Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; default: string[] }>();
-    nodes.forEach(node => childrenMap.set(node.id, { trueBranch: [], falseBranch: [], bodyBranch: [], doneBranch: [], default: [] }));
+  private buildExecutionTree(nodes: Node<FlowNodeData>[], edges: Edge[]): Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; tryBranch: string[]; catchBranch: string[]; default: string[] }> {
+    const childrenMap = new Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; tryBranch: string[]; catchBranch: string[]; default: string[] }>();
+    nodes.forEach(node => childrenMap.set(node.id, { trueBranch: [], falseBranch: [], bodyBranch: [], doneBranch: [], tryBranch: [], catchBranch: [], default: [] }));
     edges.forEach(edge => {
       const entry = childrenMap.get(edge.source);
       if (!entry) return;
@@ -472,6 +584,20 @@ class Executor {
           entry.doneBranch.push(edge.target);
         } else if (entry.bodyBranch.length === 0) {
           entry.bodyBranch.push(edge.target);
+        } else {
+          entry.doneBranch.push(edge.target);
+        }
+      } else if (sourceNode?.data.type === 'tryCatch') {
+        if (edge.sourceHandle === 'try') {
+          entry.tryBranch.push(edge.target);
+        } else if (edge.sourceHandle === 'catch') {
+          entry.catchBranch.push(edge.target);
+        } else if (edge.sourceHandle === 'done') {
+          entry.doneBranch.push(edge.target);
+        } else if (entry.tryBranch.length === 0) {
+          entry.tryBranch.push(edge.target);
+        } else if (entry.catchBranch.length === 0) {
+          entry.catchBranch.push(edge.target);
         } else {
           entry.doneBranch.push(edge.target);
         }

@@ -2,6 +2,142 @@ import { chromium, firefox, webkit } from 'playwright';
 import http from 'http';
 
 const sessions = new Map();
+const exploreSessions = new Map();
+
+function generateBestSelector(el) {
+  if (el.id) return `#${CSS.escape(el.id)}`;
+  if (el.getAttribute('data-testid')) return `[data-testid="${el.getAttribute('data-testid')}"]`;
+  if (el.getAttribute('data-test-id')) return `[data-test-id="${el.getAttribute('data-test-id')}"]`;
+  if (el.getAttribute('name')) {
+    const tag = el.tagName.toLowerCase();
+    return `${tag}[name="${el.getAttribute('name')}"]`;
+  }
+  if (el.getAttribute('aria-label')) {
+    const tag = el.tagName.toLowerCase();
+    return `${tag}[aria-label="${el.getAttribute('aria-label')}"]`;
+  }
+  if (el.getAttribute('placeholder')) {
+    const tag = el.tagName.toLowerCase();
+    return `${tag}[placeholder="${el.getAttribute('placeholder')}"]`;
+  }
+  if (el.getAttribute('role')) {
+    const tag = el.tagName.toLowerCase();
+    return `${tag}[role="${el.getAttribute('role')}"]`;
+  }
+  if (el.className && typeof el.className === 'string' && el.className.trim()) {
+    const tag = el.tagName.toLowerCase();
+    const classes = el.className.trim().split(/\s+/).filter(c => c && !c.match(/^[0-9]/) && !c.match(/^(css-|sc-|styled-|emotion-|makeStyles-)/));
+    if (classes.length > 0) return `${tag}.${classes.slice(0, 2).join('.')}`;
+  }
+  const tag = el.tagName.toLowerCase();
+  const parent = el.parentElement;
+  if (parent) {
+    const siblings = Array.from(parent.children).filter(c => c.tagName === el.tagName);
+    if (siblings.length > 1) {
+      const idx = siblings.indexOf(el) + 1;
+      return `${tag}:nth-of-type(${idx})`;
+    }
+  }
+  return tag;
+}
+
+function getXPath(el) {
+  if (el.id) return `//*[@id="${el.id}"]`;
+  if (el === document.body) return '/html/body';
+  const parent = el.parentElement;
+  if (!parent) return '';
+  const siblings = Array.from(parent.children);
+  const sameTagSiblings = siblings.filter(s => s.tagName === el.tagName);
+  const idx = sameTagSiblings.indexOf(el) + 1;
+  const tag = el.tagName.toLowerCase();
+  const parentPath = getXPath(parent);
+  if (sameTagSiblings.length > 1) {
+    return `${parentPath}/${tag}[${idx}]`;
+  }
+  return `${parentPath}/${tag}`;
+}
+
+async function inspectPageElements(page) {
+  return await page.evaluate(() => {
+    const results = [];
+    const interactiveSelectors = [
+      'button', 'input', 'select', 'textarea',
+      'a[href]', '[role="button"]', '[role="link"]', '[role="tab"]',
+      '[role="menuitem"]', '[role="option"]', '[role="checkbox"]',
+      '[contenteditable]', '[tabindex]:not([tabindex="-1"])',
+      'summary', 'details', '[data-testid]', '[data-test-id]'
+    ];
+    const seen = new Set();
+    document.querySelectorAll(interactiveSelectors.join(',')).forEach(el => {
+      if (seen.has(el)) return;
+      seen.add(el);
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) return;
+      const tag = el.tagName.toLowerCase();
+      const text = (el.textContent || '').trim().substring(0, 80);
+      const inputType = el.type || null;
+      let category = 'other';
+      if (tag === 'button' || el.getAttribute('role') === 'button') category = 'button';
+      else if (tag === 'a' || el.getAttribute('role') === 'link') category = 'link';
+      else if (tag === 'input' || tag === 'textarea' || el.contentEditable === 'true') category = 'input';
+      else if (tag === 'select') category = 'select';
+      else if (tag === 'summary' || tag === 'details') category = 'toggle';
+      else if (el.getAttribute('role') === 'tab') category = 'tab';
+      else if (el.getAttribute('role') === 'menuitem') category = 'menu';
+      else if (el.getAttribute('role') === 'checkbox') category = 'checkbox';
+      else if (el.getAttribute('role') === 'option') category = 'option';
+      let bestSelector = '';
+      if (el.id) bestSelector = `#${CSS.escape(el.id)}`;
+      else if (el.getAttribute('data-testid')) bestSelector = `[data-testid="${el.getAttribute('data-testid')}"]`;
+      else if (el.getAttribute('data-test-id')) bestSelector = `[data-test-id="${el.getAttribute('data-test-id')}"]`;
+      else if (el.getAttribute('name')) bestSelector = `${tag}[name="${el.getAttribute('name')}"]`;
+      else if (el.getAttribute('aria-label')) bestSelector = `${tag}[aria-label="${el.getAttribute('aria-label')}"]`;
+      else if (el.getAttribute('placeholder')) bestSelector = `${tag}[placeholder="${el.getAttribute('placeholder')}"]`;
+      else if (el.getAttribute('role')) bestSelector = `${tag}[role="${el.getAttribute('role')}"]`;
+      else if (el.className && typeof el.className === 'string' && el.className.trim()) {
+        const classes = el.className.trim().split(/\s+/).filter(c => c && !c.match(/^[0-9]/) && !c.match(/^(css-|sc-|styled-|emotion-|makeStyles-)/));
+        if (classes.length > 0) bestSelector = `${tag}.${classes.slice(0, 2).join('.')}`;
+      }
+      if (!bestSelector) bestSelector = tag;
+      let xpath = '';
+      try {
+        if (el.id) xpath = `//*[@id="${el.id}"]`;
+        else {
+          const parent = el.parentElement;
+          if (parent) {
+            const siblings = Array.from(parent.children).filter(c => c.tagName === el.tagName);
+            const idx = siblings.indexOf(el) + 1;
+            xpath = siblings.length > 1 ? `//${tag}[${idx}]` : `//${tag}`;
+          }
+        }
+      } catch {}
+      results.push({
+        tag,
+        text,
+        category,
+        id: el.id || null,
+        className: typeof el.className === 'string' ? el.className.substring(0, 100) : '',
+        selector: bestSelector,
+        xpath,
+        type: inputType,
+        placeholder: el.placeholder || null,
+        href: el.href || null,
+        name: el.name || null,
+        value: el.value || null,
+        role: el.getAttribute('role') || null,
+        dataTestId: el.getAttribute('data-testid') || null,
+        ariaLabel: el.getAttribute('aria-label') || null,
+        boundingBox: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
+        visible: rect.width > 0 && rect.height > 0,
+        editable: ['INPUT', 'TEXTAREA'].includes(el.tagName) || el.contentEditable === 'true',
+        checked: el.checked || false,
+        disabled: el.disabled || false,
+      });
+    });
+    results.sort((a, b) => a.boundingBox.y - b.boundingBox.y || a.boundingBox.x - b.boundingBox.x);
+    return results;
+  });
+}
 
 function getBrowser(type) {
   switch (type) {
@@ -520,11 +656,201 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.url === '/explore/open' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const { url, sessionId } = JSON.parse(body);
+        const sid = sessionId || `explore-${Date.now()}`;
+        const browser = await chromium.launch({ headless: true });
+        const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+        const page = await context.newPage();
+        if (url) await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+        page.on('close', () => {
+          const session = exploreSessions.get(sid);
+          if (session) {
+            session.closed = true;
+          }
+        });
+        exploreSessions.set(sid, { browser, context, page, closed: false, url: url || page.url() });
+        const screenshot = await page.screenshot({ type: 'png' });
+        const elements = await inspectPageElements(page);
+        const title = await page.title();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          sessionId: sid,
+          screenshot: screenshot.toString('base64'),
+          elements,
+          count: elements.length,
+          url: page.url(),
+          title,
+        }));
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: error.message }));
+      }
+    });
+    return;
+  }
+
+  if (req.url === '/explore/navigate' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const { url, sessionId } = JSON.parse(body);
+        const session = exploreSessions.get(sessionId);
+        if (!session || !session.page) throw new Error('No explore session. Open a page first.');
+        await session.page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+        session.url = session.page.url();
+        const screenshot = await session.page.screenshot({ type: 'png' });
+        const elements = await inspectPageElements(session.page);
+        const title = await session.page.title();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          screenshot: screenshot.toString('base64'),
+          elements,
+          count: elements.length,
+          url: session.page.url(),
+          title,
+        }));
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: error.message }));
+      }
+    });
+    return;
+  }
+
+  if (req.url === '/explore/refresh' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const { sessionId } = JSON.parse(body);
+        const session = exploreSessions.get(sessionId);
+        if (!session || !session.page) throw new Error('No explore session.');
+        const screenshot = await session.page.screenshot({ type: 'png' });
+        const elements = await inspectPageElements(session.page);
+        const title = await session.page.title();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          screenshot: screenshot.toString('base64'),
+          elements,
+          count: elements.length,
+          url: session.page.url(),
+          title,
+        }));
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: error.message }));
+      }
+    });
+    return;
+  }
+
+  if (req.url === '/explore/action' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const { sessionId, action, selector, value } = JSON.parse(body);
+        const session = exploreSessions.get(sessionId);
+        if (!session || !session.page) throw new Error('No explore session.');
+        const page = session.page;
+        switch (action) {
+          case 'click':
+            await page.locator(selector).click({ timeout: 5000 });
+            break;
+          case 'fill':
+            await page.locator(selector).fill(value || '');
+            break;
+          case 'type':
+            await page.locator(selector).type(value || '', { delay: 50 });
+            break;
+          case 'check':
+            await page.locator(selector).check();
+            break;
+          case 'uncheck':
+            await page.locator(selector).uncheck();
+            break;
+          case 'selectOption':
+            await page.locator(selector).selectOption(value || '');
+            break;
+          case 'hover':
+            await page.locator(selector).hover();
+            break;
+          case 'press':
+            await page.locator(selector).press(value || 'Enter');
+            break;
+          default:
+            throw new Error(`Unknown explore action: ${action}`);
+        }
+        await page.waitForTimeout(500);
+        const screenshot = await page.screenshot({ type: 'png' });
+        const elements = await inspectPageElements(page);
+        const title = await page.title();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          screenshot: screenshot.toString('base64'),
+          elements,
+          count: elements.length,
+          url: page.url(),
+          title,
+        }));
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: error.message }));
+      }
+    });
+    return;
+  }
+
+  if (req.url === '/explore/close' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const { sessionId } = JSON.parse(body);
+        const session = exploreSessions.get(sessionId);
+        if (session?.browser) {
+          try { await session.browser.close(); } catch {}
+          exploreSessions.delete(sessionId);
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: error.message }));
+      }
+    });
+    return;
+  }
+
+  if (req.url === '/explore/close-all' && req.method === 'POST') {
+    for (const [id, session] of exploreSessions) {
+      try { await session.browser.close(); } catch {}
+      exploreSessions.delete(id);
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true }));
+    return;
+  }
+
   if (req.url === '/cleanup' && req.method === 'POST') {
     for (const [id, session] of sessions) {
       try { await session.browser.close(); } catch {}
     }
     sessions.clear();
+    for (const [id, session] of exploreSessions) {
+      try { await session.browser.close(); } catch {}
+    }
+    exploreSessions.clear();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true }));
     return;

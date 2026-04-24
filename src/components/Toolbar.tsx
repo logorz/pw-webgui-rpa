@@ -1,4 +1,4 @@
-import { Play, Square, Save, FolderOpen, Code, Download, Upload, Trash2, Wifi, WifiOff, Undo2, Redo2 } from 'lucide-react';
+import { Play, Square, Save, FolderOpen, Code, Download, Upload, Trash2, Wifi, WifiOff, Undo2, Redo2, Globe } from 'lucide-react';
 
 interface ToolbarProps {
   onRun: () => void;
@@ -15,6 +15,8 @@ interface ToolbarProps {
   serverConnected: boolean;
   canUndo: boolean;
   canRedo: boolean;
+  onToggleExplorer: () => void;
+  showExplorer: boolean;
 }
 
 export default function Toolbar({
@@ -32,6 +34,8 @@ export default function Toolbar({
   serverConnected,
   canUndo,
   canRedo,
+  onToggleExplorer,
+  showExplorer,
 }: ToolbarProps) {
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -82,6 +86,15 @@ export default function Toolbar({
       </div>
 
       <div className="toolbar-group">
+        <button
+          className={`toolbar-btn ${showExplorer ? 'primary' : ''}`}
+          onClick={onToggleExplorer}
+          title="页面探索器：打开网页，检测元素，生成节点"
+        >
+          <Globe size={16} />
+          <span>探索</span>
+        </button>
+
         <button className="toolbar-btn" onClick={onGenerateCode} title="生成 Playwright 代码">
           <Code size={16} />
           <span>生成代码</span>

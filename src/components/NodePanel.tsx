@@ -31,6 +31,10 @@ import {
   Activity,
   Layers,
   Loader,
+  Shield,
+  SkipForward,
+  Workflow,
+  Terminal,
 } from 'lucide-react';
 import type { NodeTypeDefinition } from '../types/nodes';
 import { getNodesByCategory } from '../types/nodes';
@@ -65,6 +69,10 @@ const iconMap: Record<string, React.ElementType> = {
   Activity,
   Layers,
   Loader,
+  Shield,
+  SkipForward,
+  Workflow,
+  Terminal,
 };
 
 type CategoryKey = 'browser' | 'interaction' | 'network' | 'control' | 'variable' | 'assertion';
