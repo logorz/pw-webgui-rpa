@@ -1830,3 +1830,363 @@ body {
   border-top: 1px solid #e2e8f0;
   background: #f8fafc;
 }
+
+.page-explorer-flash {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #10b981;
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  z-index: 10;
+  animation: flash-in 0.3s ease-out;
+  pointer-events: none;
+}
+
+@keyframes flash-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.page-explorer-element-item.highlighted {
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+  padding-left: 25px;
+}
+
+.page-explorer-footer-hint {
+  text-align: center;
+  font-size: 11px;
+  color: #64748b;
+  padding: 4px 0 6px;
+}
+
+.page-explorer-footer-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.page-explorer-custom-selector-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+
+.page-explorer-custom-selector-btn:hover {
+  color: #3b82f6;
+}
+
+.page-explorer-custom-selector-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #fffbeb;
+  border-bottom: 1px solid #fde68a;
+  flex-shrink: 0;
+  color: #d97706;
+}
+
+.page-explorer-custom-selector-input {
+  flex: 1;
+  border: 1px solid #fde68a;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  color: #1e293b;
+  outline: none;
+  background: #fff;
+}
+
+.page-explorer-custom-selector-input:focus {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
+}
+
+.page-explorer-custom-selector-go {
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: #f59e0b;
+  color: #fff;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.page-explorer-custom-selector-go:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.page-explorer-custom-selector-go:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-explorer-custom-selector-cancel {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+}
+
+.page-explorer-custom-selector-cancel:hover {
+  color: #dc2626;
+}
+
+/* =====================================================
+   HomePage (管理页面) Styles
+   ===================================================== */
+
+.home-page {
+  background-color: #030712;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.home-header {
+  background: linear-gradient(135deg, #1e40af, #3b82f6);
+  color: #fff;
+  padding: 24px 0;
+}
+
+.home-header-content {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.home-header-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+}
+
+.home-version {
+  font-size: 0.875rem;
+  color: #bfdbfe;
+}
+
+/* Action Buttons */
+.home-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  padding: 24px;
+}
+
+.home-btn-primary {
+  background-color: #2563eb;
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.home-btn-primary:hover {
+  background-color: #1d4ed8;
+}
+
+.home-btn-secondary {
+  background: transparent;
+  color: #d1d5db;
+  padding: 10px 24px;
+  border-radius: 8px;
+  border: 1px solid #4b5563;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.home-btn-secondary:hover {
+  background-color: #1f2937;
+}
+
+/* Section Title */
+.home-section-title {
+  color: #9ca3af;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 0 24px;
+  margin-bottom: 12px;
+}
+
+/* Card Grid */
+.home-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  padding: 0 24px 24px;
+}
+
+@media (min-width: 768px) {
+  .home-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .home-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* File Card */
+.home-card {
+  background: rgba(31, 41, 55, 0.8);
+  border-radius: 0.75rem;
+  padding: 24px;
+  transition: background-color 0.2s;
+  cursor: pointer;
+}
+
+.home-card:hover {
+  background: rgba(55, 65, 81, 0.8);
+}
+
+.home-card-icon {
+  font-size: 1.5rem;
+  margin-bottom: 8px;
+}
+
+.home-card-name {
+  color: #fff;
+  font-weight: 600;
+  font-size: 1rem;
+  margin: 0 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-card-meta {
+  color: #9ca3af;
+  font-size: 0.875rem;
+  margin: 0 0 4px;
+}
+
+.home-card-time {
+  color: #6b7280;
+  font-size: 0.75rem;
+  margin: 0 0 12px;
+}
+
+.home-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.home-card-btn {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.home-card-btn-open {
+  background-color: #2563eb;
+  color: #fff;
+}
+
+.home-card-btn-open:hover {
+  background-color: #1d4ed8;
+}
+
+.home-card-btn-delete {
+  background: transparent;
+  color: #9ca3af;
+  border: 1px solid transparent;
+}
+
+.home-card-btn-delete:hover {
+  color: #f87171;
+}
+
+/* Empty State */
+.home-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 80px 20px;
+}
+
+.home-empty-icon {
+  font-size: 3.75rem;
+  margin-bottom: 16px;
+}
+
+.home-empty-text {
+  color: #6b7280;
+  font-size: 1.125rem;
+  margin: 0;
+}
+
+/* =====================================================
+   App Container (页面切换支持)
+   ===================================================== */
+
+.app-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-container.home {
+  overflow: visible;
+}
+
+.app-container.editor {
+  overflow: hidden;
+}
+
+/* =====================================================
+   Toolbar 新按钮
+   ===================================================== */
+
+.toolbar-btn.home {
+  background: rgba(30, 64, 175, 0.15);
+  color: #3b82f6;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.toolbar-btn.home:hover {
+  background: rgba(30, 64, 175, 0.25);
+  border-color: rgba(59, 130, 246, 0.5);
+}

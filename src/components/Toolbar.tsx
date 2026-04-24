@@ -4,7 +4,7 @@ interface ToolbarProps {
   onRun: () => void;
   onStop: () => void;
   onSave: () => void;
-  onLoad: () => void;
+  onOpen: () => void;
   onGenerateCode: () => void;
   onExport: () => void;
   onImport: (file: File) => void;
@@ -17,13 +17,14 @@ interface ToolbarProps {
   canRedo: boolean;
   onToggleExplorer: () => void;
   showExplorer: boolean;
+  onBackToHome: () => void;
 }
 
 export default function Toolbar({
   onRun,
   onStop,
   onSave,
-  onLoad,
+  onOpen,
   onGenerateCode,
   onExport,
   onImport,
@@ -36,6 +37,7 @@ export default function Toolbar({
   canRedo,
   onToggleExplorer,
   showExplorer,
+  onBackToHome,
 }: ToolbarProps) {
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -67,13 +69,16 @@ export default function Toolbar({
           <span>保存</span>
         </button>
 
-        <button className="toolbar-btn" onClick={onLoad} title="加载流程">
+        <button className="toolbar-btn" onClick={onOpen} title="打开工程文件">
           <FolderOpen size={16} />
-          <span>加载</span>
+          <span>打开</span>
         </button>
       </div>
 
       <div className="toolbar-group">
+        <button className="toolbar-btn" onClick={onBackToHome} title="返回主页">
+          <span>← 返回</span>
+        </button>
         <button className="toolbar-btn" onClick={onUndo} disabled={!canUndo} title="撤销 (Ctrl+Z)">
           <Undo2 size={16} />
           <span>撤销</span>
