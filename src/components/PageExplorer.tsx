@@ -126,14 +126,30 @@ function buildSpecificSelector(element: ElementInfo): string {
     return element.selector;
   }
 
-  const cssSelector = parts.join('');
+  let cssSelector = parts.join('');
 
-  // 5. Fall back to original selector if nothing specific was built
-  if (cssSelector === element.tag && element.selector) {
-    return element.selector;
+  // 5. If only a bare tag, try the server's selector first
+  if (cssSelector === element.tag) {
+    cssSelector = element.selector;
   }
 
-  return cssSelector || element.selector;
+  // 6. Still a bare tag? Try building a class selector from className
+  if (cssSelector === element.tag && element.className) {
+    const classes = element.className.trim().split(/\s+/)
+      .filter(c => c && !c.match(/^[0-9]/) && !c.match(/^(css-|sc-|styled-|emotion-|makeStyles-)/));
+    if (classes.length > 0) {
+      cssSelector = `${element.tag}.${classes.slice(0, 2).join('.')}`;
+    }
+  }
+
+  // 7. Add text disambiguation when available to avoid strict mode violation
+  // when multiple elements share the same tag/class (e.g. Ant Design dropdown triggers)
+  if (element.text && cssSelector) {
+    const escapedText = element.text.replace(/"/g, '\\"');
+    cssSelector = `${cssSelector}:has-text("${escapedText}")`;
+  }
+
+  return cssSelector || element.selector || element.tag;
 }
 
 export default function PageExplorer({ onGenerateNodes, onClose }: PageExplorerProps) {
@@ -330,15 +346,15 @@ export default function PageExplorer({ onGenerateNodes, onClose }: PageExplorerP
 
   const handleActionConfirm = useCallback(() => {
     if (!actionModal || !selectedAction) return;
-    const rawSelector = actionModal.customSelector || actionModal.element?.selector || '';
-    const selector = actionModal.customSelector || (actionModal.element ? buildSpecificSelector(actionModal.element) : rawSelector);
+    const builtSelector = actionModal.element ? buildSpecificSelector(actionModal.element) : '';
+    const selector = actionModal.customSelector || builtSelector;
     const action: PendingAction = {
       id: `action-${Date.now()}-${Math.random()}`,
       element: actionModal.element,
       action: selectedAction.label,
       value: selectedAction.needsValue ? actionValue : undefined,
       nodeType: selectedAction.nodeType,
-      customSelector: actionModal.customSelector,
+      customSelector: actionModal.customSelector || builtSelector,
     };
     setPendingActions(prev => [...prev, action]);
     handleExploreAction(

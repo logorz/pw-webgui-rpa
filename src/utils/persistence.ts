@@ -1,5 +1,6 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { FlowNodeData } from '../types/nodes';
+import { migrateProjectFile } from '../types/project';
 
 export interface FlowData {
   nodes: Node<FlowNodeData>[];
@@ -84,14 +85,32 @@ export function downloadFlowFile(json: string, filename?: string) {
   URL.revokeObjectURL(url);
 }
 
-export function importFlowFromFile(file: File): Promise<FlowData | null> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      resolve(loadFlow(content));
-    };
-    reader.onerror = () => resolve(null);
-    reader.readAsText(file);
-  });
+export async function importFlowFromFile(file: File): Promise<FlowData | null> {
+  try {
+    const text = await file.text();
+    const raw = JSON.parse(text);
+
+    // Try ProjectFile format (.pwg saved via save button)
+    const project = migrateProjectFile(raw);
+    if (project) {
+      return {
+        nodes: project.nodes,
+        edges: project.edges,
+        version: project.version,
+        createdAt: project.createdAt,
+        name: project.name,
+      };
+    }
+
+    // Fallback: FlowData format (exported via 导出 / downloadFlowFile)
+    if (raw && Array.isArray(raw.nodes) && Array.isArray(raw.edges)) {
+      return raw as FlowData;
+    }
+
+    console.error('[importFlowFromFile] Unrecognized file format');
+    return null;
+  } catch (err) {
+    console.error('[importFlowFromFile] Failed to parse file:', err);
+    return null;
+  }
 }

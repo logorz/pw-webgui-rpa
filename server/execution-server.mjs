@@ -60,22 +60,19 @@ function getXPath(el) {
 async function inspectPageElements(page) {
   return await page.evaluate(() => {
     const results = [];
-    const interactiveSelectors = [
-      'button', 'input', 'select', 'textarea',
-      'a[href]', '[role="button"]', '[role="link"]', '[role="tab"]',
-      '[role="menuitem"]', '[role="option"]', '[role="checkbox"]',
-      '[contenteditable]', '[tabindex]:not([tabindex="-1"])',
-      'summary', 'details', '[data-testid]', '[data-test-id]'
-    ];
     const seen = new Set();
-    document.querySelectorAll(interactiveSelectors.join(',')).forEach(el => {
+
+    // ── Helper: build element result entry ──
+    const addElement = (el, source) => {
       if (seen.has(el)) return;
-      seen.add(el);
       const rect = el.getBoundingClientRect();
       if (rect.width === 0 && rect.height === 0) return;
+      seen.add(el);
+
       const tag = el.tagName.toLowerCase();
       const text = (el.textContent || '').trim().substring(0, 80);
       const inputType = el.type || null;
+
       let category = 'other';
       if (tag === 'button' || el.getAttribute('role') === 'button') category = 'button';
       else if (tag === 'a' || el.getAttribute('role') === 'link') category = 'link';
@@ -86,6 +83,8 @@ async function inspectPageElements(page) {
       else if (el.getAttribute('role') === 'menuitem') category = 'menu';
       else if (el.getAttribute('role') === 'checkbox') category = 'checkbox';
       else if (el.getAttribute('role') === 'option') category = 'option';
+      else if (source === 'framework' || source === 'cursor') category = 'clickable';
+
       let bestSelector = '';
       if (el.id) bestSelector = `#${CSS.escape(el.id)}`;
       else if (el.getAttribute('data-testid')) bestSelector = `[data-testid="${el.getAttribute('data-testid')}"]`;
@@ -99,6 +98,7 @@ async function inspectPageElements(page) {
         if (classes.length > 0) bestSelector = `${tag}.${classes.slice(0, 2).join('.')}`;
       }
       if (!bestSelector) bestSelector = tag;
+
       let xpath = '';
       try {
         if (el.id) xpath = `//*[@id="${el.id}"]`;
@@ -111,6 +111,7 @@ async function inspectPageElements(page) {
           }
         }
       } catch {}
+
       results.push({
         tag,
         text,
@@ -133,7 +134,51 @@ async function inspectPageElements(page) {
         checked: el.checked || false,
         disabled: el.disabled || false,
       });
+    };
+
+    // ── Strategy 1: Standard selectors + framework class patterns ──
+    const selectors = [
+      // Standard interactive HTML elements
+      'button', 'input', 'select', 'textarea',
+      'a[href]', '[role="button"]', '[role="link"]', '[role="tab"]',
+      '[role="menuitem"]', '[role="option"]', '[role="checkbox"]',
+      '[contenteditable]', '[tabindex]:not([tabindex="-1"])',
+      'summary', 'details', '[data-testid]', '[data-test-id]',
+      // Framework class patterns
+      '.ant-dropdown-trigger', '.ant-menu-item', '.ant-btn',
+      '.el-dropdown-trigger', '.el-menu-item',
+      '[onclick]', '[onmousedown]',
+    ];
+    document.querySelectorAll(selectors.join(',')).forEach(el => {
+      addElement(el, 'selector');
     });
+
+    // ── Strategy 2: Event-tracked elements (from addInitScript) ──
+    if (window.__interactiveElements && typeof window.__interactiveElements.forEach === 'function') {
+      window.__interactiveElements.forEach(el => {
+        if (!document.contains(el)) return;
+        addElement(el, 'event');
+      });
+    }
+
+    // ── Strategy 3: cursor:pointer detection ──
+    // Scan for div/span/li/label that look clickable but have no ARIA/role
+    document.querySelectorAll('div, span, li, td, th, label').forEach(el => {
+      if (seen.has(el)) return;
+      const rect = el.getBoundingClientRect();
+      // Skip layout containers and invisible elements
+      if (rect.width === 0 || rect.height === 0) return;
+      if (rect.width > 400 && rect.height > 80) return;
+      const text = (el.textContent || '').trim();
+      if (!text || text.length > 80) return;
+      // Check if CSS indicates interactivity
+      try {
+        if (getComputedStyle(el).cursor === 'pointer') {
+          addElement(el, 'cursor');
+        }
+      } catch {}
+    });
+
     results.sort((a, b) => a.boundingBox.y - b.boundingBox.y || a.boundingBox.x - b.boundingBox.x);
     return results;
   });
@@ -153,7 +198,7 @@ async function executeAction(action, params, sessionId) {
   switch (action) {
     case 'open': {
       const browserType = params.browserType || 'chromium';
-      const launchOpts = { headless: params.headless !== false };
+      const launchOpts = { headless: params.headless !== 'false' };
       const browser = await getBrowser(browserType).launch(launchOpts);
       const contextOpts = {};
       if (params.viewport) {
@@ -666,6 +711,19 @@ const server = http.createServer(async (req, res) => {
         const browser = await chromium.launch({ headless: true });
         const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
         const page = await context.newPage();
+
+        // Patch addEventListener to track elements with direct event bindings
+        page.addInitScript(() => {
+          window.__interactiveElements = new Set();
+          const original = EventTarget.prototype.addEventListener;
+          EventTarget.prototype.addEventListener = function (type, handler, options) {
+            if (this && this.nodeType === 1) {
+              window.__interactiveElements.add(this);
+            }
+            return original.call(this, type, handler, options);
+          };
+        });
+
         if (url) await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
         page.on('close', () => {
           const session = exploreSessions.get(sid);
