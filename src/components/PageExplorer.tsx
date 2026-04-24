@@ -102,6 +102,40 @@ const ACTION_OPTIONS: Record<string, { label: string; nodeType: string; needsVal
   ],
 };
 
+function buildSpecificSelector(element: ElementInfo): string {
+  // 1. ID is the most specific
+  if (element.id) return `#${CSS.escape(element.id)}`;
+
+  // 2. data-testid
+  if (element.dataTestId) return `[data-testid="${element.dataTestId}"]`;
+
+  // 3. Build from tag + attributes for uniqueness
+  const parts: string[] = [element.tag];
+
+  if (element.name) parts.push(`[name="${element.name}"]`);
+  if (element.type && element.type !== 'text') parts.push(`[type="${element.type}"]`);
+  if (element.placeholder) parts.push(`[placeholder="${element.placeholder}"]`);
+  if (element.role) parts.push(`[role="${element.role}"]`);
+  if (element.href) {
+    const href = element.href.replace(/^https?:\/\/[^/]+/, '');
+    parts.push(`[href="${href}"]`);
+  }
+
+  // 4. If the selector already has special chars (like ::), trust the original
+  if (element.selector.includes('::') || element.selector.includes(':nth-')) {
+    return element.selector;
+  }
+
+  const cssSelector = parts.join('');
+
+  // 5. Fall back to original selector if nothing specific was built
+  if (cssSelector === element.tag && element.selector) {
+    return element.selector;
+  }
+
+  return cssSelector || element.selector;
+}
+
 export default function PageExplorer({ onGenerateNodes, onClose }: PageExplorerProps) {
   const [url, setUrl] = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -122,8 +156,9 @@ export default function PageExplorer({ onGenerateNodes, onClose }: PageExplorerP
   const [selectedAction, setSelectedAction] = useState<{ label: string; nodeType: string; needsValue: boolean } | null>(null);
   const [customSelector, setCustomSelector] = useState('');
   const [showCustomSelector, setShowCustomSelector] = useState(false);
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState(0.25);
   const [actionFlash, setActionFlash] = useState<string | null>(null);
+  const [screenshotExpanded, setScreenshotExpanded] = useState(false);
   const screenshotRef = useRef<HTMLDivElement>(null);
   const screenshotScrollRef = useRef<HTMLDivElement>(null);
 
@@ -295,7 +330,8 @@ export default function PageExplorer({ onGenerateNodes, onClose }: PageExplorerP
 
   const handleActionConfirm = useCallback(() => {
     if (!actionModal || !selectedAction) return;
-    const selector = actionModal.customSelector || actionModal.element?.selector || '';
+    const rawSelector = actionModal.customSelector || actionModal.element?.selector || '';
+    const selector = actionModal.customSelector || (actionModal.element ? buildSpecificSelector(actionModal.element) : rawSelector);
     const action: PendingAction = {
       id: `action-${Date.now()}-${Math.random()}`,
       element: actionModal.element,
@@ -388,9 +424,9 @@ export default function PageExplorer({ onGenerateNodes, onClose }: PageExplorerP
   useEffect(() => {
     if (screenshotRef.current) {
       const containerWidth = screenshotRef.current.clientWidth;
-      setScale(containerWidth / 1280);
+      setScale(screenshotExpanded ? Math.min(containerWidth / 1280, 1) : Math.min(containerWidth / 1280, 0.3));
     }
-  }, [screenshot]);
+  }, [screenshot, screenshotExpanded]);
 
   const categorizedElements = elements.reduce((acc, el) => {
     if (!acc[el.category]) acc[el.category] = [];
@@ -468,7 +504,15 @@ export default function PageExplorer({ onGenerateNodes, onClose }: PageExplorerP
       )}
 
       {screenshot && (
-        <div className="page-explorer-screenshot" ref={screenshotScrollRef}>
+        <div className={`page-explorer-screenshot ${screenshotExpanded ? 'expanded' : 'collapsed'}`} ref={screenshotScrollRef}>
+          <div className="page-explorer-screenshot-actions">
+            <button className="page-explorer-screenshot-action-btn" onClick={(e) => { e.stopPropagation(); handleRefresh(); }} title="刷新页面截图和元素">
+              <RefreshCw size={11} />
+            </button>
+            <span className="page-explorer-screenshot-toggle" onClick={() => setScreenshotExpanded(prev => !prev)}>
+              {screenshotExpanded ? '收起' : '展开'}
+            </span>
+          </div>
           {actionFlash && (
             <div className="page-explorer-flash">页面已更新 ✓</div>
           )}

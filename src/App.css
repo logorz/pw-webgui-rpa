@@ -1401,6 +1401,70 @@ body {
   flex-shrink: 0;
   background: #f1f5f9;
   position: relative;
+  transition: max-height 0.3s ease;
+}
+
+.page-explorer-screenshot.collapsed {
+  max-height: 160px;
+}
+
+.page-explorer-screenshot.expanded {
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.page-explorer-screenshot-actions {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  z-index: 10;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.page-explorer-screenshot-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #64748b;
+  background: rgba(255,255,255,0.85);
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid #e2e8f0;
+  transition: all 0.15s;
+  line-height: 1.6;
+  height: 20px;
+}
+
+.page-explorer-screenshot-action-btn:hover {
+  background: #fff;
+  color: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.page-explorer-screenshot-toggle {
+  font-size: 10px;
+  color: #64748b;
+  background: rgba(255,255,255,0.85);
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid #e2e8f0;
+  transition: all 0.15s;
+  user-select: none;
+  line-height: 1.6;
+  height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+.page-explorer-screenshot-toggle:hover {
+  background: #fff;
+  color: #3b82f6;
+  border-color: #3b82f6;
 }
 
 .page-explorer-screenshot-inner {
@@ -1844,6 +1908,62 @@ body {
   z-index: 10;
   animation: flash-in 0.3s ease-out;
   pointer-events: none;
+}
+
+/* Collapsed Log Panel */
+.app-log.collapsed {
+  width: auto !important;
+  min-width: 32px !important;
+}
+
+.log-panel-collapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 32px;
+}
+
+.log-panel-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 8px 4px;
+  border-radius: 4px;
+  writing-mode: vertical-lr;
+  transition: color 0.15s;
+}
+
+.log-panel-toggle:hover {
+  color: #3b82f6;
+}
+
+.log-panel-toggle-stats {
+  writing-mode: horizontal-tb;
+}
+
+.log-panel-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  transition: color 0.15s;
+  margin-left: 4px;
+}
+
+.log-panel-toggle-btn:hover {
+  color: #475569;
+  background: #f1f5f9;
 }
 
 @keyframes flash-in {

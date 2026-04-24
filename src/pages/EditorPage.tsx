@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { Node, Edge, Connection } from '@xyflow/react';
 import type { FlowNodeData } from '../types/nodes';
@@ -135,6 +135,8 @@ export default function EditorPage({
   onClosePicker,
   reactFlowWrapperRef,
 }: EditorPageProps) {
+  const [logCollapsed, setLogCollapsed] = useState(false);
+
   return (
     <ReactFlowProvider>
       <div className="app">
@@ -190,8 +192,8 @@ export default function EditorPage({
             </ErrorBoundary>
           )}
 
-          <div className="app-log">
-            <LogPanel logs={logs} isExecuting={isExecuting} />
+          <div className={`app-log ${logCollapsed ? 'collapsed' : ''}`}>
+            <LogPanel logs={logs} isExecuting={isExecuting} collapsed={logCollapsed} onToggle={() => setLogCollapsed(prev => !prev)} />
           </div>
         </div>
 

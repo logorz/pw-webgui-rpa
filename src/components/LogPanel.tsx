@@ -1,10 +1,12 @@
 import { useRef, useEffect } from 'react';
-import { CheckCircle, XCircle, Loader2, Clock, Terminal } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Clock, Terminal, ChevronRight, ChevronLeft } from 'lucide-react';
 import type { ExecutionLog } from '../engine/executor';
 
 interface LogPanelProps {
   logs: ExecutionLog[];
   isExecuting: boolean;
+  collapsed?: boolean;
+  onToggle?: () => void;
 }
 
 const statusConfig = {
@@ -14,17 +16,31 @@ const statusConfig = {
   error: { icon: XCircle, color: '#ef4444', label: '失败' },
 };
 
-export default function LogPanel({ logs, isExecuting }: LogPanelProps) {
+export default function LogPanel({ logs, isExecuting, collapsed = false, onToggle }: LogPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (scrollRef.current) {
+    if (!collapsed && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [logs]);
+  }, [logs, collapsed]);
 
   const successCount = logs.filter((l) => l.status === 'success').length;
   const errorCount = logs.filter((l) => l.status === 'error').length;
+
+  if (collapsed) {
+    return (
+      <div className="log-panel log-panel-collapsed">
+        <button className="log-panel-toggle" onClick={onToggle} title="展开执行日志">
+          <ChevronLeft size={14} />
+          <Terminal size={14} />
+          <span className="log-panel-toggle-stats">
+            {errorCount > 0 && <span className="log-stat error" style={{ padding: '0 4px', fontSize: 10 }}>{errorCount}</span>}
+          </span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="log-panel">
@@ -42,6 +58,9 @@ export default function LogPanel({ logs, isExecuting }: LogPanelProps) {
           )}
           <span className="log-stat success">成功: {successCount}</span>
           <span className="log-stat error">失败: {errorCount}</span>
+          <button className="log-panel-toggle-btn" onClick={onToggle} title="收起日志面板">
+            <ChevronRight size={14} />
+          </button>
         </div>
       </div>
 
