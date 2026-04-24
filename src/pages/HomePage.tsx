@@ -73,7 +73,10 @@ export default function HomePage({ onNewProject, onOpenProject, onImportProject 
 
   const handleOpenViaFileSystem = useCallback(async () => {
     const { project } = await openFromFileSystem();
-    if (!project) return;
+    if (!project) {
+      alert('打开失败，请检查文件格式是否正确（支持 .pwg 文件）');
+      return;
+    }
 
     // Add to recent files
     const recentEntry: RecentFile = {
@@ -89,7 +92,10 @@ export default function HomePage({ onNewProject, onOpenProject, onImportProject 
   const handleOpenViaInput = useCallback(
     async (file: File) => {
       const project = await openFromFileInput(file);
-      if (!project) return;
+      if (!project) {
+        alert('打开失败，请检查文件格式是否正确（支持 .pwg 和 .json 文件）');
+        return;
+      }
 
       const recentEntry: RecentFile = {
         name: project.name,
@@ -106,7 +112,10 @@ export default function HomePage({ onNewProject, onOpenProject, onImportProject 
   const handleImport = useCallback(
     async (file: File) => {
       const project = await openFromFileInput(file);
-      if (!project) return;
+      if (!project) {
+        alert('导入失败，请检查文件格式是否正确（支持 .pwg 和 .json 文件）');
+        return;
+      }
 
       onImportProject(project);
     },

@@ -1,4 +1,5 @@
 import type { ProjectFile, RecentFile } from '../types/project';
+import { migrateProjectFile } from '../types/project';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -82,9 +83,29 @@ export async function openFromFileSystem(): Promise<{
 
     const file = await handle.getFile();
     const text = await file.text();
-    const project = JSON.parse(text) as ProjectFile;
+    const raw = JSON.parse(text);
 
-    return { project, handle: handle as FileSystemFileHandle };
+    // Try ProjectFile format first
+    const project = migrateProjectFile(raw);
+    if (project) return { project, handle: handle as FileSystemFileHandle };
+
+    // Fallback: FlowData format (exported via 导出)
+    if (raw && Array.isArray(raw.nodes) && Array.isArray(raw.edges)) {
+      const now = new Date().toISOString();
+      const converted: ProjectFile = {
+        format: 'playwright-cli-gui',
+        version: raw.version || '1.0',
+        createdAt: raw.createdAt || now,
+        updatedAt: now,
+        name: raw.name || 'Imported Project',
+        nodes: raw.nodes,
+        edges: raw.edges,
+      };
+      return { project: converted, handle: handle as FileSystemFileHandle };
+    }
+
+    console.error('[openFromFileSystem] Unrecognized file format');
+    return { project: null, handle: null };
   } catch (err) {
     // User cancelled (AbortError) — return nulls gracefully
     if (err instanceof DOMException && err.name === 'AbortError') {
@@ -129,9 +150,30 @@ export function downloadProjectFile(project: ProjectFile): void {
 export async function openFromFileInput(file: File): Promise<ProjectFile | null> {
   try {
     const text = await file.text();
-    const project = JSON.parse(text) as ProjectFile;
-    return project;
-  } catch {
+    const raw = JSON.parse(text);
+
+    // Try ProjectFile format (saved via Ctrl+S / save button)
+    const project = migrateProjectFile(raw);
+    if (project) return project;
+
+    // Fallback: FlowData format (exported via 导出 / downloadFlowFile)
+    if (raw && Array.isArray(raw.nodes) && Array.isArray(raw.edges)) {
+      const now = new Date().toISOString();
+      return {
+        format: 'playwright-cli-gui',
+        version: raw.version || '1.0',
+        createdAt: raw.createdAt || now,
+        updatedAt: now,
+        name: raw.name || 'Imported Project',
+        nodes: raw.nodes,
+        edges: raw.edges,
+      };
+    }
+
+    console.error('[openFromFileInput] Unrecognized file format');
+    return null;
+  } catch (err) {
+    console.error('[openFromFileInput] Failed to parse file:', err);
     return null;
   }
 }

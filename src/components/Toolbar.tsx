@@ -115,7 +115,7 @@ export default function Toolbar({
           <span>导入</span>
           <input
             type="file"
-            accept=".json"
+            accept=".pwg,.json"
             onChange={handleImport}
             style={{ display: 'none' }}
           />
