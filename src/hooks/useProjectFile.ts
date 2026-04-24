@@ -12,7 +12,7 @@ export interface UseProjectFileReturn {
   currentProject: ProjectFile | null;
   hasFile: boolean;
   isDirty: boolean;
-  currentFileHandle: FileSystemFileHandle | null;
+  currentFileHandle: any;
 
   newProject: () => void;
   openProject: () => Promise<boolean>;
@@ -28,7 +28,7 @@ export interface UseProjectFileReturn {
 export function useProjectFile(): UseProjectFileReturn {
   const [currentProject, setCurrentProject] = useState<ProjectFile | null>(null);
   const [currentFileHandle, setCurrentFileHandle] =
-    useState<FileSystemFileHandle | null>(null);
+    useState<any>(null);
   const [isDirty, setIsDirty] = useState(false);
 
   // ── derived ──────────────────────────────────────────────────────────────

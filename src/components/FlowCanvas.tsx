@@ -4,10 +4,10 @@ import {
   Background,
   Controls,
   MiniMap,
-  ReactFlowProvider,
   Panel,
 } from '@xyflow/react';
-import type { Connection, Edge, Node } from '@xyflow/react';
+import type { Connection, Edge, Node, OnNodesChange, OnEdgesChange } from '@xyflow/react';
+import type { ComponentType } from 'react';
 import '@xyflow/react/dist/style.css';
 import CustomNode from './CustomNode';
 import CustomEdge from './CustomEdge';
@@ -16,8 +16,8 @@ import type { FlowNodeData } from '../types/nodes';
 interface FlowCanvasProps {
   nodes: Node<FlowNodeData>[];
   edges: Edge[];
-  onNodesChange: (changes: any[]) => void;
-  onEdgesChange: (changes: any[]) => void;
+  onNodesChange: OnNodesChange<Node<FlowNodeData>>;
+  onEdgesChange: OnEdgesChange;
   onConnect: (connection: Connection) => void;
   onNodeDoubleClick: (event: React.MouseEvent, node: Node<FlowNodeData>) => void;
   onDrop: (event: React.DragEvent) => void;
@@ -25,7 +25,7 @@ interface FlowCanvasProps {
   executingNodeId?: string | null;
 }
 
-const nodeTypes = { custom: CustomNode };
+const nodeTypes = { custom: CustomNode as unknown as ComponentType<any> };
 const edgeTypes = { default: CustomEdge }
 
 function FlowCanvasInner({
@@ -106,9 +106,5 @@ function FlowCanvasInner({
 }
 
 export default function FlowCanvas(props: FlowCanvasProps) {
-  return (
-    <ReactFlowProvider>
-      <FlowCanvasInner {...props} />
-    </ReactFlowProvider>
-  );
+  return <FlowCanvasInner {...props} />;
 }

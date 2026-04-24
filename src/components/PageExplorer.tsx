@@ -234,7 +234,7 @@ export default function PageExplorer({ onGenerateNodes, onClose }: PageExplorerP
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId }),
       });
-    } catch {}
+    } catch (e) { console.warn('[PageExplorer] close session failed:', e); }
     setSessionId(null);
     setScreenshot(null);
     setElements([]);
@@ -263,7 +263,7 @@ export default function PageExplorer({ onGenerateNodes, onClose }: PageExplorerP
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId }),
         });
-      } catch {}
+      } catch (e) { console.warn('[PageExplorer] close on confirm failed:', e); }
     }
     setSessionId(null);
     setScreenshot(null);
@@ -496,7 +496,6 @@ export default function PageExplorer({ onGenerateNodes, onClose }: PageExplorerP
                 const isHighlighted = highlightedElement?.selector === el.selector && highlightedElement?.boundingBox.x === bb.x && highlightedElement?.boundingBox.y === bb.y;
                 const isHovered = hoveredElement?.selector === el.selector && hoveredElement?.boundingBox.x === bb.x && hoveredElement?.boundingBox.y === bb.y;
                 const isPending = pendingActions.some(a => a.element?.selector === el.selector);
-                const showOutline = isHighlighted || isHovered;
                 return (
                   <g key={`${el.selector}-${idx}`}>
                     <rect

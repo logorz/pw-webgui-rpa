@@ -1,6 +1,7 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { FlowNodeData } from '../types/nodes';
 import { getNodeDefinition } from '../types/nodes';
+import { buildExecutionTree, findRootNodes } from './graphUtils';
 
 export interface GeneratedCode {
   code: string;
@@ -212,7 +213,7 @@ function generateNodeCode(node: Node<FlowNodeData>, indent: string, variables: S
     }
 
     case 'setVariable': {
-      const name = p.name || 'variable';
+      const name = String(p.name || 'variable');
       const value = p.value ?? '';
       variables.add(name);
       lines.push(`${indent}const ${name} = ${resolveVar(value, variables)};`);
@@ -225,7 +226,7 @@ function generateNodeCode(node: Node<FlowNodeData>, indent: string, variables: S
         break;
       }
       const attr = p.attribute === 'custom' ? p.customAttribute : p.attribute;
-      const varName = p.variableName || `extracted_${Date.now()}`;
+      const varName = String(p.variableName || `extracted_${Date.now()}`);
       variables.add(varName);
       if (attr === 'textContent') {
         lines.push(`${indent}const ${varName} = await page.locator(${resolveVar(p.selector, variables)}).first().textContent() || '';`);
@@ -310,7 +311,7 @@ function generateNodeCode(node: Node<FlowNodeData>, indent: string, variables: S
         greaterThanOrEqual: '>=',
         lessThanOrEqual: '<=',
       };
-      const op = opMap[comparison] || '===';
+      const op = opMap[String(comparison)] || '===';
       lines.push(`${indent}const _count = await page.locator(${resolveVar(p.selector, variables)}).count();`);
       lines.push(`${indent}if (!(_count ${op} ${expectedCount})) throw new Error(\`Expected count ${op} ${expectedCount}, got \${_count}\`);`);
       break;
@@ -378,7 +379,7 @@ function generateNodeCode(node: Node<FlowNodeData>, indent: string, variables: S
       lines.push(`${indent}const _downloadPromise = page.waitForEvent('download');`);
       lines.push(`${indent}await page.locator(${resolveVar(p.triggerSelector, variables)}).click();`);
       lines.push(`${indent}const _download = await _downloadPromise;`);
-      const dlVarName = p.variableName || 'downloadPath';
+      const dlVarName = String(p.variableName || 'downloadPath');
       variables.add(dlVarName);
       if (p.savePath) {
         lines.push(`${indent}await _download.saveAs(${resolveVar(p.savePath, variables)});`);
@@ -498,60 +499,6 @@ function generateNodeCode(node: Node<FlowNodeData>, indent: string, variables: S
   return lines.join('\n');
 }
 
-function buildExecutionTree(nodes: Node<FlowNodeData>[], edges: Edge[]): Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; tryBranch: string[]; catchBranch: string[]; default: string[] }> {
-  const childrenMap = new Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; tryBranch: string[]; catchBranch: string[]; default: string[] }>();
-
-  nodes.forEach(node => {
-    childrenMap.set(node.id, { trueBranch: [], falseBranch: [], bodyBranch: [], doneBranch: [], tryBranch: [], catchBranch: [], default: [] });
-  });
-
-  edges.forEach(edge => {
-    const entry = childrenMap.get(edge.source);
-    if (!entry) return;
-    const sourceNode = nodes.find(n => n.id === edge.source);
-    if (sourceNode?.data.type === 'if') {
-      if (edge.sourceHandle === 'true' || entry.trueBranch.length === 0) {
-        entry.trueBranch.push(edge.target);
-      } else {
-        entry.falseBranch.push(edge.target);
-      }
-    } else if (sourceNode?.data.type === 'while' || sourceNode?.data.type === 'foreach') {
-      if (edge.sourceHandle === 'body') {
-        entry.bodyBranch.push(edge.target);
-      } else if (edge.sourceHandle === 'done') {
-        entry.doneBranch.push(edge.target);
-      } else if (entry.bodyBranch.length === 0) {
-        entry.bodyBranch.push(edge.target);
-      } else {
-        entry.doneBranch.push(edge.target);
-      }
-    } else if (sourceNode?.data.type === 'tryCatch') {
-      if (edge.sourceHandle === 'try') {
-        entry.tryBranch.push(edge.target);
-      } else if (edge.sourceHandle === 'catch') {
-        entry.catchBranch.push(edge.target);
-      } else if (edge.sourceHandle === 'done') {
-        entry.doneBranch.push(edge.target);
-      } else if (entry.tryBranch.length === 0) {
-        entry.tryBranch.push(edge.target);
-      } else if (entry.catchBranch.length === 0) {
-        entry.catchBranch.push(edge.target);
-      } else {
-        entry.doneBranch.push(edge.target);
-      }
-    } else {
-      entry.default.push(edge.target);
-    }
-  });
-
-  return childrenMap;
-}
-
-function findRootNodes(nodes: Node<FlowNodeData>[], edges: Edge[]): Node<FlowNodeData>[] {
-  const targetIds = new Set(edges.map(e => e.target));
-  return nodes.filter(node => !targetIds.has(node.id));
-}
-
 function generateConditionCode(params: Record<string, string | number | boolean>, variables: Set<string>): string {
   switch (params.condition) {
     case 'selectorExists':
@@ -640,7 +587,7 @@ function generateRecursive(
       lines.push(...generateRecursive(childId, nodes, childrenMap, new Set(visited), indent, variables));
     });
   } else if (node.data.type === 'foreach') {
-    const varName = node.data.parameters.variableName || 'item';
+    const varName = String(node.data.parameters.variableName || 'item');
     const selector = node.data.parameters.selector || 'div';
     variables.add(varName);
     lines.push(`${indent}const _elements = await page.locator(${resolveVar(selector, variables)}).all();`);
@@ -671,8 +618,8 @@ function generateRecursive(
   } else if (node.data.type === 'breakLoop') {
     lines.push(`${indent}break;`);
   } else if (node.data.type === 'log') {
-    const message = resolveVar(p.message || "''", variables);
-    const level = p.level || 'info';
+    const message = resolveVar(node.data.parameters.message || "''", variables);
+    const level = node.data.parameters.level || 'info';
     if (level === 'warn') {
       lines.push(`${indent}console.warn(${message});`);
     } else if (level === 'error') {
@@ -681,7 +628,7 @@ function generateRecursive(
       lines.push(`${indent}console.log(${message});`);
     }
   } else if (node.data.type === 'callSubflow') {
-    const flowName = p.flowName || '';
+    const flowName = node.data.parameters.flowName || '';
     lines.push(`${indent}// TODO: Call sub-flow "${esc(flowName)}"`);
     lines.push(`${indent}// Sub-flow execution requires the Playwright GUI runtime`);
   } else {
@@ -700,7 +647,6 @@ export function generatePlaywrightCode(nodes: Node<FlowNodeData>[], edges: Edge[
 
   const hasOpenBrowser = nodes.some(n => n.data.type === 'open');
   const hasCloseBrowser = nodes.some(n => n.data.type === 'close');
-  const hasAssertions = nodes.some(n => n.data.type.startsWith('assert'));
   const browserType = nodes.find(n => n.data.type === 'open')?.data.parameters.browserType || 'chromium';
 
   const lines: string[] = [

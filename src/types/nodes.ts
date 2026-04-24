@@ -31,6 +31,7 @@ export interface FlowNodeData {
   icon?: string;
   color?: string;
   isExecuting?: boolean;
+  [key: string]: unknown;
 }
 
 export interface FlowEdgeData {
@@ -1576,3 +1577,48 @@ export function getNodeDefinition(type: string): NodeTypeDefinition | undefined 
 export function getNodesByCategory(category: NodeCategory): NodeTypeDefinition[] {
   return NODE_DEFINITIONS.filter((n) => n.category === category);
 }
+
+export const NodeType = {
+  OPEN_BROWSER: 'open',
+  GOTO: 'goto',
+  CLICK: 'click',
+  FILL: 'fill',
+  TYPE: 'type',
+  PRESS: 'press',
+  CHECKBOX: 'checkbox',
+  SELECT_OPTION: 'selectOption',
+  UPLOAD: 'upload',
+  HOVER: 'hover',
+  SCREENSHOT: 'screenshot',
+  WAIT_FOR_SELECTOR: 'waitForSelector',
+  WAIT_FOR_TIMEOUT: 'waitForTimeout',
+  WAIT_FOR_URL: 'waitForUrl',
+  WAIT_FOR_LOAD_STATE: 'waitForLoadState',
+  CLOSE: 'close',
+  SWITCH_PAGE: 'switchPage',
+  IF: 'if',
+  WHILE: 'while',
+  FOREACH: 'foreach',
+  TRY_CATCH: 'tryCatch',
+  BREAK_LOOP: 'breakLoop',
+  CALL_SUBFLOW: 'callSubflow',
+  LOG: 'log',
+  SET_VARIABLE: 'setVariable',
+  EXTRACT: 'extract',
+  EVALUATE: 'evaluate',
+  ASSERT_VISIBLE: 'assertVisible',
+  ASSERT_TEXT: 'assertText',
+  ASSERT_URL: 'assertUrl',
+  ASSERT_TITLE: 'assertTitle',
+  ASSERT_ELEMENT_COUNT: 'assertElementCount',
+  ASSERT_ATTRIBUTE: 'assertAttribute',
+  SAVE_AUTH: 'saveAuth',
+  LOAD_AUTH: 'loadAuth',
+  HANDLE_DIALOG: 'handleDialog',
+  DOWNLOAD: 'download',
+  ROUTE_MOCK: 'routeMock',
+  ROUTE_ABORT: 'routeAbort',
+  WAIT_FOR_RESPONSE: 'waitForResponse',
+} as const;
+
+export type NodeType = (typeof NodeType)[keyof typeof NodeType];

@@ -1,33 +1,21 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { addEdge, useNodesState, useEdgesState, ReactFlowProvider } from '@xyflow/react';
+import { addEdge, useNodesState, useEdgesState } from '@xyflow/react';
 import type { Node, Edge, Connection } from '@xyflow/react';
+import { Switch, Route, useLocation } from 'wouter';
 import '@xyflow/react/dist/style.css';
 import './App.css';
 import type { FlowNodeData } from './types/nodes';
 import { getNodeDefinition } from './types/nodes';
-import NodePanel from './components/NodePanel';
-import FlowCanvas from './components/FlowCanvas';
-import NodeConfigPanel from './components/NodeConfigPanel';
-import LogPanel from './components/LogPanel';
-import Toolbar from './components/Toolbar';
-import CodePreview from './components/CodePreview';
-import QuickNodePicker from './components/QuickNodePicker';
-import PageExplorer from './components/PageExplorer';
 import { executor } from './engine/executor';
 import type { ExecutionLog } from './engine/executor';
 import type { PendingAction } from './components/PageExplorer';
 import { generatePlaywrightCode } from './engine/codeGenerator';
 import useProjectFile, { useAutoSave } from './hooks/useProjectFile';
 import HomePage from './pages/HomePage';
-import type { AppPage, ProjectFile } from './types/project';
-import { importFlowFromFile } from './utils/persistence';
+import EditorPage from './pages/EditorPage';
+import type { ProjectFile } from './types/project';
+import { importFlowFromFile, exportFlowToFile, downloadFlowFile } from './utils/persistence';
 import { useUndoRedo } from './hooks/useUndoRedo';
-
-let nodeIdCounter = 0;
-
-function getNodeId() {
-  return `node-${++nodeIdCounter}`;
-}
 
 type PickerMode = 'after' | 'between';
 
@@ -49,8 +37,9 @@ const initialPickerState: PickerState = {
 };
 
 function App() {
-  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNodeData>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [, navigate] = useLocation();
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<FlowNodeData>>([] as Node<FlowNodeData>[]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNode, setSelectedNode] = useState<Node<FlowNodeData> | null>(null);
   const [logs, setLogs] = useState<ExecutionLog[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -60,9 +49,13 @@ function App() {
   const [serverConnected, setServerConnected] = useState(false);
   const [picker, setPicker] = useState<PickerState>(initialPickerState);
   const [showExplorer, setShowExplorer] = useState(false);
-  const [page, setPage] = useState<AppPage>('home');
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const nodeIdCounterRef = useRef(0);
+
+  function getNodeId() {
+    return `node-${++nodeIdCounterRef.current}`;
+  }
 
   const {
     currentProject,
@@ -96,10 +89,16 @@ function App() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isDirty]);
 
+  const handleSave = useCallback(async () => {
+    if (currentProject === null) {
+      await saveProjectAs();
+    } else {
+      await saveProject();
+    }
+  }, [currentProject, saveProject, saveProjectAs]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl + Z: Undo
-      // Cmd/Ctrl + Shift + Z: Redo
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
         e.preventDefault();
         if (e.shiftKey) {
@@ -108,7 +107,6 @@ function App() {
           undo();
         }
       }
-      // Cmd/Ctrl + S: Save
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
         handleSave();
@@ -281,7 +279,7 @@ function App() {
             {
               id: `edge-${Date.now()}-b`,
               source: newNode.id,
-              target: picker.targetId,
+              target: picker.targetId || '',
               animated: true,
             },
           ];
@@ -346,14 +344,6 @@ function App() {
     setExecutingNodeId(null);
   }, []);
 
-  const handleSave = useCallback(async () => {
-    if (currentProject === null) {
-      await saveProjectAs();
-    } else {
-      await saveProject();
-    }
-  }, [currentProject, saveProject, saveProjectAs]);
-
   const handleOpen = useCallback(async () => {
     await openProject();
   }, [openProject]);
@@ -365,11 +355,9 @@ function App() {
   }, [nodes, edges]);
 
   const handleExport = useCallback(() => {
-    // 导出为 Playwright 测试代码
-    const result = generatePlaywrightCode(nodes, edges);
-    setGeneratedCode(result.code);
-    setShowCode(true);
-  }, [nodes, edges]);
+    const json = exportFlowToFile(nodes, edges, currentProject?.name);
+    downloadFlowFile(json, `${currentProject?.name || 'playwright-flow'}.pwg`);
+  }, [nodes, edges, currentProject]);
 
   const handleImport = useCallback(
     async (file: File) => {
@@ -386,41 +374,43 @@ function App() {
   );
 
   const handleClear = useCallback(() => {
+    if (!window.confirm('确定要清空所有节点吗？此操作不可撤销。')) return;
+    nodeIdCounterRef.current = 0;
     setNodes([]);
     setEdges([]);
     setLogs([]);
   }, [setNodes, setEdges]);
 
   const handleNewProject = useCallback(() => {
-    // 如果有未保存的节点...可以简单先不处理，后续用 beforeunload
+    nodeIdCounterRef.current = 0;
     newProject();
     setNodes([]);
     setEdges([]);
     setLogs([]);
     setShowCode(false);
     setSelectedNode(null);
-    setPage('editor');
-  }, [newProject, setNodes, setEdges]);
+    navigate('/editor');
+  }, [newProject, setNodes, setEdges, navigate]);
 
   const handleOpenProjectFile = useCallback((project: ProjectFile) => {
     setNodes(project.nodes);
     setEdges(project.edges);
-    setPage('editor');
-  }, [setNodes, setEdges]);
+    navigate('/editor');
+  }, [setNodes, setEdges, navigate]);
 
   const handleImportProject = useCallback((project: ProjectFile) => {
     setNodes(project.nodes);
     setEdges(project.edges);
-    setPage('editor');
-  }, [setNodes, setEdges]);
+    navigate('/editor');
+  }, [setNodes, setEdges, navigate]);
 
   const handleBackToHome = useCallback(() => {
     if (isDirty) {
       const confirmed = window.confirm('当前工程有未保存的修改，确定要返回管理页面吗？');
       if (!confirmed) return;
     }
-    setPage('home');
-  }, [isDirty]);
+    navigate('/');
+  }, [isDirty, navigate]);
 
   const handleExplorerGenerateNodes = useCallback(
     (actions: PendingAction[]) => {
@@ -527,91 +517,60 @@ function App() {
 
   return (
     <div className="app-container">
-      {page === 'home' ? (
-        <HomePage
-          onNewProject={handleNewProject}
-          onOpenProject={handleOpenProjectFile}
-          onImportProject={handleImportProject}
-        />
-      ) : (
-        <ReactFlowProvider>
-          <div className="app">
-            <Toolbar
-              onRun={handleRun}
-              onStop={handleStop}
-              onSave={handleSave}
-              onOpen={handleOpen}
-              onGenerateCode={handleGenerateCode}
-              onExport={handleExport}
-              onImport={handleImport}
-              onClear={handleClear}
-              onUndo={undo}
-              onRedo={redo}
-              isExecuting={isExecuting}
-              serverConnected={serverConnected}
-              canUndo={canUndo}
-              canRedo={canRedo}
-              onToggleExplorer={() => setShowExplorer(prev => !prev)}
-              showExplorer={showExplorer}
-              onBackToHome={handleBackToHome}
-            />
-
-            <div className="app-body" ref={reactFlowWrapper}>
-              <div className="app-sidebar">
-                <NodePanel onDragStart={onDragStart} />
-              </div>
-
-              <div className="app-canvas">
-                <FlowCanvas
-                  nodes={nodes}
-                  edges={edges}
-                  onNodesChange={onNodesChange}
-                  onEdgesChange={onEdgesChange}
-                  onConnect={onConnect}
-                  onNodeDoubleClick={onNodeDoubleClick}
-                  onDrop={onDrop}
-                  onDragOver={onDragOver}
-                  executingNodeId={executingNodeId}
-                />
-              </div>
-
-              {showExplorer && (
-                <div className="app-explorer">
-                  <PageExplorer
-                    onGenerateNodes={handleExplorerGenerateNodes}
-                    onClose={() => setShowExplorer(false)}
-                  />
-                </div>
-              )}
-
-              <div className="app-log">
-                <LogPanel logs={logs} isExecuting={isExecuting} />
-              </div>
-            </div>
-
-            {selectedNode && (
-              <NodeConfigPanel
-                node={selectedNode}
-                onClose={() => setSelectedNode(null)}
-                onSave={onSaveNodeConfig}
-                allVariables={collectedVariables}
-              />
-            )}
-
-            {showCode && (
-              <CodePreview code={generatedCode} onClose={() => setShowCode(false)} />
-            )}
-
-            {picker.show && (
-              <QuickNodePicker
-                position={picker.position}
-                onSelect={handlePickerSelect}
-                onClose={() => setPicker(initialPickerState)}
-              />
-            )}
-          </div>
-        </ReactFlowProvider>
-      )}
+      <Switch>
+        <Route path="/">
+          <HomePage
+            onNewProject={handleNewProject}
+            onOpenProject={handleOpenProjectFile}
+            onImportProject={handleImportProject}
+          />
+        </Route>
+        <Route path="/editor">
+          <EditorPage
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            executingNodeId={executingNodeId}
+            selectedNode={selectedNode}
+            onSaveNodeConfig={onSaveNodeConfig}
+            onCloseConfigPanel={() => setSelectedNode(null)}
+            onNodeDoubleClick={onNodeDoubleClick}
+            allVariables={collectedVariables}
+            logs={logs}
+            isExecuting={isExecuting}
+            serverConnected={serverConnected}
+            onRun={handleRun}
+            onStop={handleStop}
+            onSave={handleSave}
+            onOpen={handleOpen}
+            onGenerateCode={handleGenerateCode}
+            onExport={handleExport}
+            onImport={handleImport}
+            onClear={handleClear}
+            onUndo={undo}
+            onRedo={redo}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onBackToHome={handleBackToHome}
+            showCode={showCode}
+            generatedCode={generatedCode}
+            onCloseCode={() => setShowCode(false)}
+            onDragStart={onDragStart}
+            onDrop={onDrop}
+            onDragOver={onDragOver}
+            showExplorer={showExplorer}
+            onToggleExplorer={() => setShowExplorer(prev => !prev)}
+            onExplorerGenerateNodes={handleExplorerGenerateNodes}
+            onCloseExplorer={() => setShowExplorer(false)}
+            picker={picker}
+            onPickerSelect={handlePickerSelect}
+            onClosePicker={() => setPicker(initialPickerState)}
+            reactFlowWrapperRef={reactFlowWrapper}
+          />
+        </Route>
+      </Switch>
     </div>
   );
 }

@@ -26,8 +26,8 @@ export function useUndoRedo(
     }
 
     const entry: HistoryEntry = {
-      nodes: JSON.parse(JSON.stringify(nodes)),
-      edges: JSON.parse(JSON.stringify(edges)),
+      nodes: structuredClone(nodes),
+      edges: structuredClone(edges),
     };
 
     if (indexRef.current < historyRef.current.length - 1) {
@@ -48,8 +48,8 @@ export function useUndoRedo(
     indexRef.current--;
     skipRecordRef.current = true;
     const entry = historyRef.current[indexRef.current];
-    setNodes(JSON.parse(JSON.stringify(entry.nodes)));
-    setEdges(JSON.parse(JSON.stringify(entry.edges)));
+    setNodes(structuredClone(entry.nodes));
+    setEdges(structuredClone(entry.edges));
   }, [setNodes, setEdges]);
 
   const redo = useCallback(() => {
@@ -57,8 +57,8 @@ export function useUndoRedo(
     indexRef.current++;
     skipRecordRef.current = true;
     const entry = historyRef.current[indexRef.current];
-    setNodes(JSON.parse(JSON.stringify(entry.nodes)));
-    setEdges(JSON.parse(JSON.stringify(entry.edges)));
+    setNodes(structuredClone(entry.nodes));
+    setEdges(structuredClone(entry.edges));
   }, [setNodes, setEdges]);
 
   const canUndo = indexRef.current > 0;

@@ -1,6 +1,6 @@
 import React, { memo, useState, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import type { NodeProps } from '@xyflow/react';
+import type { NodeProps, Node } from '@xyflow/react';
 import type { FlowNodeData } from '../types/nodes';
 import {
   Globe,
@@ -105,7 +105,7 @@ function renderParamValue(value: string): React.ReactNode[] {
   return parts;
 }
 
-function CustomNode({ data, selected, id }: NodeProps<FlowNodeData>) {
+function CustomNode({ data, selected, id }: NodeProps<Node<FlowNodeData>>) {
   const Icon = iconMap[data.icon || 'Globe'] || Globe;
   const isExecuting = data.isExecuting;
   const [isHovered, setIsHovered] = useState(false);

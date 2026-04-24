@@ -11,12 +11,6 @@ interface NodeConfigPanelProps {
   allVariables?: string[];
 }
 
-function resolveVariableRef(value: string, variables: string[]): string[] {
-  const matches = value.match(/\$\{(\w+)\}/g);
-  if (!matches) return [];
-  return matches.map(m => m.slice(2, -1)).filter(v => variables.includes(v));
-}
-
 function renderVariablePreview(value: string): React.ReactNode[] {
   const str = String(value);
   const regex = /\$\{(\w+)\}/g;

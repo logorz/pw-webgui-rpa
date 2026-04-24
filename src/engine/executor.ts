@@ -1,7 +1,8 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { FlowNodeData } from '../types/nodes';
 import { getNodeDefinition } from '../types/nodes';
-import { loadCurrentFlow, getSavedFlows } from '../utils/persistence';
+import { getSavedFlows } from '../utils/persistence';
+import { buildExecutionTree, findRootNodes, resolveVariables } from './graphUtils';
 
 class BreakSignal extends Error {
   constructor() {
@@ -43,7 +44,6 @@ class Executor {
   private logs: ExecutionLog[] = [];
   private callback?: ExecutionCallback;
   private abortController: AbortController | null = null;
-  private ws: WebSocket | null = null;
   private serverConnected: boolean = false;
 
   setCallback(callback: ExecutionCallback) {
@@ -92,8 +92,8 @@ class Executor {
   ): Promise<ExecutionResult> {
     const sessionId = `session-${Date.now()}`;
     try {
-      const childrenMap = this.buildExecutionTree(nodes, edges);
-      const rootNodes = this.findRootNodes(nodes, edges);
+      const childrenMap = buildExecutionTree(nodes, edges);
+      const rootNodes = findRootNodes(nodes, edges);
 
       if (rootNodes.length === 0 && nodes.length > 0) {
         rootNodes.push(nodes[0]);
@@ -117,7 +117,7 @@ class Executor {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'close', params: {}, sessionId }),
         });
-      } catch {}
+      } catch (e) { console.warn('[executor] close session failed:', e); }
 
       return {
         success: true,
@@ -127,7 +127,7 @@ class Executor {
     } catch (error) {
       try {
         await fetch(`http://localhost:3210/cleanup`, { method: 'POST' });
-      } catch {}
+      } catch (e) { console.warn('[executor] cleanup failed:', e); }
       return {
         success: false,
         logs: this.logs,
@@ -212,11 +212,11 @@ class Executor {
         }
       } else if (node.data.type === 'foreach') {
         const selector = node.data.parameters.selector || 'div';
-        const varName = node.data.parameters.variableName || 'item';
+        const varName = String(node.data.parameters.variableName || 'item');
         if (ctx.page) {
           const elements = await ctx.page.locator(selector).all();
           for (const el of elements) {
-            ctx.variables[varName] = el;
+            ctx.variables[varName] = await el.textContent() || '';
             try {
               for (const childId of children.bodyBranch) {
                 await this.executeNodeReal(childId, nodes, childrenMap, new Set(visited), ctx);
@@ -248,7 +248,7 @@ class Executor {
       } else if (node.data.type === 'breakLoop') {
         throw new BreakSignal();
       } else if (node.data.type === 'log') {
-        const message = this.resolveVariables(
+        const message = resolveVariables(
           { message: node.data.parameters.message || '' },
           ctx.variables
         ).message;
@@ -259,7 +259,7 @@ class Executor {
           nodeType: 'log',
           nodeLabel: '输出日志',
           status: level === 'error' ? 'error' : level === 'warn' ? 'running' : 'success',
-          message: `[${level.toUpperCase()}] ${message}`,
+          message: `[${String(level).toUpperCase()}] ${message}`,
           timestamp: Date.now(),
           duration: 0,
         });
@@ -269,15 +269,14 @@ class Executor {
         const savedFlows = getSavedFlows();
         const targetFlow = savedFlows.find(f => f.name === flowName);
         if (!targetFlow) throw new Error(`未找到名为"${flowName}"的已保存流程`);
-        const flowData = JSON.parse(targetFlow.data);
-        if (flowData.nodes && flowData.edges) {
-          const subChildrenMap = this.buildExecutionTree(flowData.nodes, flowData.edges);
-          const subRootNodes = this.findRootNodes(flowData.nodes, flowData.edges);
-          if (subRootNodes.length === 0 && flowData.nodes.length > 0) {
-            subRootNodes.push(flowData.nodes[0]);
+        if (targetFlow.nodes && targetFlow.edges) {
+          const subChildrenMap = buildExecutionTree(targetFlow.nodes, targetFlow.edges);
+          const subRootNodes = findRootNodes(targetFlow.nodes, targetFlow.edges);
+          if (subRootNodes.length === 0 && targetFlow.nodes.length > 0) {
+            subRootNodes.push(targetFlow.nodes[0]);
           }
           for (const root of subRootNodes) {
-            await this.executeNodeReal(root.id, flowData.nodes, subChildrenMap, new Set(), ctx);
+            await this.executeNodeReal(root.id, targetFlow.nodes, subChildrenMap, new Set(), ctx);
           }
         }
       } else {
@@ -300,25 +299,8 @@ class Executor {
     }
   }
 
-  private resolveVariables(
-    params: Record<string, string | number | boolean>,
-    variables: Record<string, string>
-  ): Record<string, string | number | boolean> {
-    const resolved: Record<string, string | number | boolean> = {};
-    for (const [key, value] of Object.entries(params)) {
-      if (typeof value === 'string' && value.includes('${')) {
-        resolved[key] = value.replace(/\$\{(\w+)\}/g, (_, varName) => {
-          return variables[varName] !== undefined ? String(variables[varName]) : `\${${varName}}`;
-        });
-      } else {
-        resolved[key] = value;
-      }
-    }
-    return resolved;
-  }
-
   private async runNodeAction(node: Node<FlowNodeData>, ctx: ExecutionContext): Promise<void> {
-    const p = this.resolveVariables(node.data.parameters, ctx.variables);
+    const p = resolveVariables(node.data.parameters, ctx.variables);
     const action = node.data.type;
 
     let response: Response;
@@ -352,7 +334,7 @@ class Executor {
     ctx: ExecutionContext
   ): Promise<boolean> {
     try {
-      const resolvedParams = this.resolveVariables(params, ctx.variables);
+      const resolvedParams = resolveVariables(params, ctx.variables);
       const response = await fetch('http://localhost:3210/evaluate-condition', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -381,8 +363,8 @@ class Executor {
     });
 
     try {
-      const childrenMap = this.buildExecutionTree(nodes, edges);
-      const rootNodes = this.findRootNodes(nodes, edges);
+      const childrenMap = buildExecutionTree(nodes, edges);
+      const rootNodes = findRootNodes(nodes, edges);
 
       if (rootNodes.length === 0 && nodes.length > 0) {
         rootNodes.push(nodes[0]);
@@ -502,7 +484,7 @@ class Executor {
           nodeType: 'log',
           nodeLabel: '输出日志',
           status: level === 'error' ? 'error' : level === 'warn' ? 'running' : 'success',
-          message: `[模拟] [${level.toUpperCase()}] ${message}`,
+          message: `[模拟] [${String(level).toUpperCase()}] ${message}`,
           timestamp: Date.now(),
           duration: 0,
         });
@@ -562,55 +544,6 @@ class Executor {
 
   abort() {
     this.abortController?.abort();
-  }
-
-  private buildExecutionTree(nodes: Node<FlowNodeData>[], edges: Edge[]): Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; tryBranch: string[]; catchBranch: string[]; default: string[] }> {
-    const childrenMap = new Map<string, { trueBranch: string[]; falseBranch: string[]; bodyBranch: string[]; doneBranch: string[]; tryBranch: string[]; catchBranch: string[]; default: string[] }>();
-    nodes.forEach(node => childrenMap.set(node.id, { trueBranch: [], falseBranch: [], bodyBranch: [], doneBranch: [], tryBranch: [], catchBranch: [], default: [] }));
-    edges.forEach(edge => {
-      const entry = childrenMap.get(edge.source);
-      if (!entry) return;
-      const sourceNode = nodes.find(n => n.id === edge.source);
-      if (sourceNode?.data.type === 'if') {
-        if (edge.sourceHandle === 'true' || entry.trueBranch.length === 0) {
-          entry.trueBranch.push(edge.target);
-        } else {
-          entry.falseBranch.push(edge.target);
-        }
-      } else if (sourceNode?.data.type === 'while' || sourceNode?.data.type === 'foreach') {
-        if (edge.sourceHandle === 'body') {
-          entry.bodyBranch.push(edge.target);
-        } else if (edge.sourceHandle === 'done') {
-          entry.doneBranch.push(edge.target);
-        } else if (entry.bodyBranch.length === 0) {
-          entry.bodyBranch.push(edge.target);
-        } else {
-          entry.doneBranch.push(edge.target);
-        }
-      } else if (sourceNode?.data.type === 'tryCatch') {
-        if (edge.sourceHandle === 'try') {
-          entry.tryBranch.push(edge.target);
-        } else if (edge.sourceHandle === 'catch') {
-          entry.catchBranch.push(edge.target);
-        } else if (edge.sourceHandle === 'done') {
-          entry.doneBranch.push(edge.target);
-        } else if (entry.tryBranch.length === 0) {
-          entry.tryBranch.push(edge.target);
-        } else if (entry.catchBranch.length === 0) {
-          entry.catchBranch.push(edge.target);
-        } else {
-          entry.doneBranch.push(edge.target);
-        }
-      } else {
-        entry.default.push(edge.target);
-      }
-    });
-    return childrenMap;
-  }
-
-  private findRootNodes(nodes: Node<FlowNodeData>[], edges: Edge[]): Node<FlowNodeData>[] {
-    const targetIds = new Set(edges.map(e => e.target));
-    return nodes.filter(node => !targetIds.has(node.id));
   }
 }
 

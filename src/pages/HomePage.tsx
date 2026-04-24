@@ -153,7 +153,7 @@ export default function HomePage({ onNewProject, onOpenProject, onImportProject 
   );
 
   const handleOpenRecent = useCallback(
-    (file: RecentFile) => {
+    (_file: RecentFile) => {
       // Recent file entries don't carry a serializable handle.
       // The most practical UX is to re-trigger the file picker.
       // We set a suggested name hint via the accept attribute only.

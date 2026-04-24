@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Copy, Check, Play } from 'lucide-react';
+import { X, Copy, Check } from 'lucide-react';
 
 interface CodePreviewProps {
   code: string;
@@ -7,7 +7,7 @@ interface CodePreviewProps {
   onRunCode?: (code: string) => void;
 }
 
-export default function CodePreview({ code, onClose, onRunCode }: CodePreviewProps) {
+export default function CodePreview({ code, onClose, onRunCode: _onRunCode }: CodePreviewProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
